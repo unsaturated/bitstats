@@ -24,8 +24,6 @@ if(program.set) {
   const rl = readline.createInterface({
     input: process.stdin,
     output: process.stdout,
-  }).on('close', () => {
-    logger.log('debug', 'on-event CLOSE');
   });
 
   let prompts = [
@@ -51,12 +49,12 @@ if(program.set) {
     return value.toString().match(valueRegex);
   };
 
-
   /**
    * Prompts user with questions and awaits value from STDIN.
-   * @param {Number} promptIndex
+   * @param {Number} promptIndex starting index for prompts/questions
+   * @param {Function} doneCallback callback on question complete (no error)
    */
-  const getResponses = (promptIndex = 0) => {
+  const getResponses = (promptIndex = 0, doneCallback) => {
     rl.question(prompts[promptIndex].question, (a) => {
       if(!isCleanValue(a)) {
         logger.log('error', prompts[promptIndex].error);
@@ -66,11 +64,11 @@ if(program.set) {
         prompts[promptIndex].answer = a;
         if(promptIndex + 1 < prompts.length) {
           // Go to the next prompt
-          return getResponses(promptIndex + 1);
+          return getResponses(promptIndex + 1, doneCallback);
         }
       }
       rl.close();
-      return prompts;
+      return doneCallback();
     });
   };
 
@@ -84,7 +82,6 @@ if(program.set) {
       return q.answer;
     })).join(os.EOL);
 
-    logger.log('debug', 'data = %s', data);
     const filePath = path.join(creds.directory, creds.fileName);
 
     fs.writeFile(filePath, data, (err) => {
@@ -95,6 +92,5 @@ if(program.set) {
     });
   };
 
-  getResponses();
-  writeResponses();
+  getResponses(0, writeResponses);
 }
