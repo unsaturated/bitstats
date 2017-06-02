@@ -1,11 +1,15 @@
 #! /usr/bin/env node
 
+/**
+ * Entry point for the bitstats program.
+ */
+
 const pkg = require('./package.json');
 const program = require('commander');
 
 program
   .description(pkg.description)
   .version(pkg.version)
-  .command('repo [name]', 'Repository peer review (PR) stats')
+  .command('repo [name]', 'Repository peer review stats')
   .command('setup', 'Setup authentication with Bitbucket')
   .parse(process.argv);
