@@ -1,0 +1,11 @@
+#! /usr/bin/env node
+
+const pkg = require('./package.json');
+const program = require('commander');
+
+program
+  .description(pkg.description)
+  .version(pkg.version)
+  .command('repo [name]', 'Repository peer review (PR) stats')
+  .command('setup', 'Setup authentication with Bitbucket')
+  .parse(process.argv);
