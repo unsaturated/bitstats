@@ -1,7 +1,15 @@
 {
     "extends": "google",
-    "es6": true,
+    "env": {
+        "es6": true
+    },
     "parserOptions": {
         "ecmaVersion": 6
+    },
+    "rules": {
+        "ignoreTrailingComments": 0,
+        "max-len": [2, 120, {
+            "code": 120
+        }]
     }
 }
