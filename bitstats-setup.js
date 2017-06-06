@@ -29,5 +29,5 @@ if (program.get) {
 }
 
 if(program.token) {
-    setup.token();
+    setup.setToken();
 }

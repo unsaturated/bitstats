@@ -35,6 +35,10 @@ module.exports = {
     }
   },
 
+  /**
+   * Serializes to a file credential information used to fetch an OAuth access
+   * token. It overwrites previous credential information stored in the file.
+   */
   setCredentials: function() {
     const rl = readline.createInterface({
       input: process.stdin,
@@ -97,7 +101,37 @@ module.exports = {
     getResponses(0, writeResponses);
   },
 
-  token: function() {
+  /**
+   * Gets the credential information used to fetch an OAuth access token.
+   * @return {Object|Null} Key/secret object, null if not found
+   */
+  getCredentials: function() {
+    const filePath = path.join(creds.directory, creds.fileNameAuth);
+    let result = null;
+
+    if (fs.existsSync(filePath)) {
+      let data = fs.readFileSync(filePath);
+
+      let dataSplit = data.toString().split(os.EOL);
+
+      if (dataSplit.length === 2) {
+        if (isCleanValue(dataSplit[0]) && isCleanValue(dataSplit[1])) {
+          result = {
+            'key': dataSplit[0],
+            'secret': dataSplit[1],
+          };
+        } else {
+          logger.log('error', dataSplit);
+        }
+      }
+    }
+    return result;
+  },
+
+  /**
+   * Fetches and serializes a new or refreshed OAuth access token.
+   */
+  setToken: function() {
     // const options = {
     //   method: 'GET',
     //   url: 'https://api.bitbucket.org/2.0/repositories/madmobile',
@@ -141,8 +175,7 @@ module.exports = {
 
     request(oauthOptions)
       .then((body) => {
-        const data = JSON.parse(body);
-        writeToken(data);
+        writeToken(body);
         logger.log('debug', 'Token saved.');
       })
       .catch((err) => {
@@ -151,27 +184,20 @@ module.exports = {
   },
 
   /**
-   * Reads the credential/setup information.
-   * @return {object} Null or key/secret object
+   * Gets the OAuth access token response cached locally.
+   * @return {Object|Null} OAuth object, null if not found
    */
-  getCredentials: function() {
+  getToken: function() {
     const filePath = path.join(creds.directory, creds.fileNameAuth);
     let result = null;
 
     if (fs.existsSync(filePath)) {
       let data = fs.readFileSync(filePath);
 
-      let dataSplit = data.toString().split(os.EOL);
-
-      if (dataSplit.length === 2) {
-        if (isCleanValue(dataSplit[0]) && isCleanValue(dataSplit[1])) {
-          result = {
-            'key': dataSplit[0],
-            'secret': dataSplit[1],
-          };
-        } else {
-          logger.log('error', dataSplit);
-        }
+      try {
+        result = JSON.parse(data);
+      } catch(err) {
+       logger.log('error', `Unparseable auth data in file '${filePath}'. Run 'setup -t' again.`);
       }
     }
     return result;
