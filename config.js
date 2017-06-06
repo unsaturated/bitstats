@@ -29,8 +29,19 @@ const logger = new winston.Logger({
 
 logger.level = 'debug';
 
+const bitbucket = {
+  api: {
+    baseUrl: 'https://api.bitbucket.org/2.0',
+  },
+  oauth: {
+    baseUrl: 'https://bitbucket.org/site/oauth2',
+    accessTokenUrl: 'https://bitbucket.org/site/oauth2/access_token',
+  },
+};
+
 const creds = {
-  fileName: 'bitstats-auth',
+  fileNameAuth: '.bitstats-oauth',
+  fileNameToken: '.bitstats-token',
   directory: os.homedir(),
 };
 
@@ -44,3 +55,9 @@ module.exports.logger = logger;
  * @type {{fileName: string, directory: *}}
  */
 module.exports.credentials = creds;
+
+/**
+ * Bitbucket configuration.
+ * @type {{api: {baseUrl: string}, oauth: {baseUrl: string, accessTokenUrl: string}}}
+ */
+module.exports.bitbucket = bitbucket;

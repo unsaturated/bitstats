@@ -9,6 +9,25 @@ program
     'used for authentication')
   .option('-c, --clear', 'removes all settings')
   .option('-s, --set', 'sets or overwrites credentails')
+  .option('-g, --get', 'gets the current credentials')
+  .option('-t, --token', 'retrieves/refreshes OAuth access token')
   .parse(process.argv);
 
-setup.run(program);
+if (program.clear) {
+  setup.clear();
+}
+
+if (program.set) {
+    setup.setCredentials();
+}
+
+if (program.get) {
+    let creds = setup.getCredentials();
+    if(creds) {
+        logger.log('info', creds);
+    }
+}
+
+if(program.token) {
+    setup.token();
+}

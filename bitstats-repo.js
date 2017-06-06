@@ -3,6 +3,7 @@
 const program = require('commander');
 const request = require('request-promise');
 const logger = require('./config').logger;
+const setup = require('./setup/setup');
 
 program
 .option('-a, --all', 'all PRs')
@@ -11,10 +12,10 @@ program
 const repos = program.args;
 
 // Validate repository input
-if(!repos.length){
-  logger.log('error', 'No repository specified');
-  process.exit(1);
-}
+// if(!repos.length) {
+//   logger.log('error', 'No repository specified');
+//   process.exit(1);
+// }
 
 // TODO
 // https://developer.atlassian.com/bitbucket/api/2/reference/resource/repositories
@@ -40,17 +41,42 @@ const options = {
   },
 };
 
-const req = request(options)
-  .then(body => {
+const credValues = setup.getCredentials();
+if(credValues == null) {
+  logger.log('error', 'Repo command requires setup file');
+  process.exit(1);
+}
+
+logger.log('info', 'Using credentials %s / %s ', credValues.key, credValues.secret);
+
+const oauthOptions = {
+  method: 'POST',
+  url: 'https://bitbucket.org/site/oauth2/access_token',
+  headers: {
+    'content-type': 'application/x-www-form-urlencoded',
+  },
+  auth: {
+    user: credValues.key,
+    pass: credValues.secret,
+    sendImmediately: true,
+  },
+  body: 'grant_type=client_credentials',
+};
+
+request(oauthOptions)
+  .then((body) => {
     const info = JSON.parse(body);
-    console.log(info);
+    logger.log('error', info);
   })
-  .catch(err => {
-    console.err('ERROR' + err);
+  .catch((err) => {
+    logger.log('error', err);
   });
 
-
-// repos.forEach(function(pkg){
-//   console.log('  install : %s', pkg);
-// });
-console.log();
+// const req = request(options)
+//   .then(body => {
+//     const info = JSON.parse(body);
+//     console.log(info);
+//   })
+//   .catch(err => {
+//     console.err('ERROR' + err);
+//   });
