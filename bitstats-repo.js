@@ -42,7 +42,7 @@ const options = {
 };
 
 const credValues = setup.getCredentials();
-if(credValues == null) {
+if(credValues === null) {
   logger.log('error', 'Repo command requires setup file');
   process.exit(1);
 }
@@ -71,12 +71,3 @@ request(oauthOptions)
   .catch((err) => {
     logger.log('error', err);
   });
-
-// const req = request(options)
-//   .then(body => {
-//     const info = JSON.parse(body);
-//     console.log(info);
-//   })
-//   .catch(err => {
-//     console.err('ERROR' + err);
-//   });
