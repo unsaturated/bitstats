@@ -188,14 +188,16 @@ module.exports = {
    * @return {Object|Null} OAuth object, null if not found
    */
   getToken: function() {
-    const filePath = path.join(creds.directory, creds.fileNameAuth);
+    const filePath = path.join(creds.directory, creds.fileNameToken);
     let result = null;
 
     if (fs.existsSync(filePath)) {
       let data = fs.readFileSync(filePath);
 
       try {
-        result = JSON.parse(data);
+        if(data.length > 0) {
+          result = JSON.parse(data);
+        }
       } catch(err) {
        logger.log('error', `Unparseable auth data in file '${filePath}'. Run 'setup -t' again.`);
       }
