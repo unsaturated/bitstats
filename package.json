@@ -1,6 +1,6 @@
 {
   "name": "bitstats",
-  "version": "1.0.0",
+  "version": "0.0.1",
   "description": "Tool for analyzing Bitbucket PRs and Git repository activity",
   "main": "bitstats",
   "scripts": {
