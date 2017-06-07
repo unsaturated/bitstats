@@ -3,6 +3,7 @@
  */
 const winston = require('winston');
 const os = require('os');
+const path = require('path');
 
 const logger = new winston.Logger({
   transports: [
@@ -46,6 +47,11 @@ const creds = {
   directory: os.homedir(),
 };
 
+const repo = {
+  fileNameReposIndex: '.bitstats-repos',
+  directory: path.join(os.homedir(), '.bitstats-data'),
+};
+
 /**
  * Common application logger.
  */
@@ -56,6 +62,12 @@ module.exports.logger = logger;
  * @type {{fileName: string, directory: *}}
  */
 module.exports.credentials = creds;
+
+/**
+ * Repository settings.
+ * @type {{fileNameRepos: string, directory: *}}
+ */
+module.exports.repositories = repo;
 
 /**
  * Bitbucket configuration.
