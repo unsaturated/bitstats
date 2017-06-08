@@ -168,7 +168,6 @@ module.exports = {
    */
   listRepos: function(projects) {
     let index = getIndexFromDisk();
-    logger.log('debug', index);
     if(index === null || !index.repos) {
       logger.log('error', `Listing requires a repo index file. Run command 'repo --refresh'.`);
     }
