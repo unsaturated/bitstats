@@ -132,7 +132,7 @@ module.exports = {
   },
 
   /**
-   * Fetches and serializes a new or refreshed OAuth access token.
+   * Fetches and serializes a new OAuth access token.
    */
   setToken: function() {
     const credValues = this.getCredentials();
@@ -176,6 +176,66 @@ module.exports = {
       .catch((err) => {
         logger.log('error', err);
       });
+  },
+
+  /**
+   * Refreshes the access token using the refresh token.
+   * @return {object} promise
+   */
+  refreshToken: function() {
+    return new Promise( (resolve, reject) => {
+      const token = this.getToken();
+      if (token === null) {
+        logger.log('error', `Token file was not found. Run the 'setup -t' command to create one.`);
+        process.exit(1);
+      }
+
+      const credValues = this.getCredentials();
+      if (credValues === null) {
+        logger.log('error', `Credential file was not found. Run the 'setup' command to create one.`);
+        process.exit(1);
+      }
+
+      let data = `grant_type=refresh_token&refresh_token=${token.refresh_token}`;
+
+      const oauthOptions = {
+        method: 'POST',
+        url: bitbucket.oauth.accessTokenUrl,
+        headers: {
+          'content-type': 'application/x-www-form-urlencoded',
+        },
+        auth: {
+          user: credValues.key,
+          pass: credValues.secret,
+          sendImmediately: true,
+        },
+        body: data,
+      };
+
+      const writeToken = (data) => {
+        createDir(creds.directory);
+
+        const filePath = path.join(creds.directory, creds.fileNameToken);
+
+        fs.writeFile(filePath, data, (err) => {
+          if (err) {
+            let msg = `Could not write access token to file '${filePath}'`;
+            logger.log('error', msg);
+          }
+        });
+      };
+
+      request(oauthOptions)
+        .then((body) => {
+          writeToken(body);
+          logger.log('debug', 'Token refreshed and saved.');
+          resolve(body);
+        })
+        .catch((err) => {
+          logger.log('error', err);
+          reject(err);
+        });
+    });
   },
 
   /**
