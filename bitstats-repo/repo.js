@@ -191,11 +191,16 @@ module.exports = {
       regexCondition = new RegExp(projects.join('|'), 'i');
       filtered = _.filter(index.repos, (o) => {
         if(regexCondition) {
-          return regexCondition.test(o.project.key);
+          return regexCondition.test(o.project.key) || regexCondition.test(o.project.name);
         }
         return true;
       });
     }
+
+    // Alpha sort
+    filtered = _.sortBy(filtered, (o) => {
+      return o.slug;
+    });
 
     // Only return the data that matters
     filtered.map((r) => {
