@@ -8,6 +8,8 @@ const setup = require('../setup/setup');
 const fs = require('fs');
 const path = require('path');
 const request = require('request-promise');
+const _ = require('lodash');
+const Table = require('cli-table');
 
 module.exports = {
 
@@ -58,6 +60,12 @@ module.exports = {
       gzip: true,
     };
 
+    const cloneOptionsWithToken = (opt, updatedToken) => {
+      let clonedOpt = Object.assign({}, opt);
+      clonedOpt.headers.Authorization = `Bearer ${updatedToken.access_token}`;
+      return clonedOpt;
+    };
+
     /**
      * Uses request to fetch a page of data.
      * @param {object} req request instance
@@ -72,7 +80,7 @@ module.exports = {
 
       const requestPage = (options) => {
         logger.log('debug', `Fetching ${options.url} ...`);
-        req(options)
+        return req(options)
           .then((body) => {
             const info = JSON.parse(body);
             let nextUrl = getNextPageUrl(info);
@@ -80,38 +88,32 @@ module.exports = {
             if(nextUrl !== null) {
               options.url = nextUrl;
               requestPage(options);
-            }
-            writeResponses(JSON.stringify(repoIndexObj));
-            return repoIndexObj;
-          })
-          .catch((err) => {
-            if (err.statusCode === 401) {
-              // Likely an old access token; throw it and let the containing function figure it out
-              throw err;
             } else {
-              logger.log('error', err);
+              writeResponses(JSON.stringify(repoIndexObj));
             }
           });
       };
 
-      let result = null;
-      try {
-        result = requestPage(options);
-      } catch(err) {
-        // Reset already accumlated repos
-        repoIndexObj.repos = [];
-        logger.log('debug', 'Access token rejected. Refreshing it now.');
-        setup.refreshToken()
-          .then((refreshedToken) => {
-            token = setup.getToken();
-            logger.log('debug', 'New access token received. Retrying repo request.');
-            // Use original options
-            result = requestPage(originalOptions);
-          });
-      }
-      finally {
-        return result;
-      }
+      requestPage(options)
+        .then(() => {
+        return repoIndexObj;
+      })
+        .catch((err) => {
+          if (err.statusCode === 401) {
+            // Reset already accumlated repos
+            repoIndexObj.repos = [];
+            logger.log('debug', 'Access token rejected. Refreshing it now.');
+            setup.refreshToken()
+              .then((refreshedToken) => {
+                let updatedOptionsWithToken = cloneOptionsWithToken(originalOptions, refreshedToken);
+                logger.log('debug', 'New access token received. Retrying repo request.');
+                // Use original options but with new token
+                requestPage(updatedOptionsWithToken);
+              });
+          } else {
+            logger.log('error', err);
+          }
+        });
     };
 
     /**
@@ -159,6 +161,36 @@ module.exports = {
   refresh: function() {
     this.clear();
     this.getRepos();
+  },
+
+  listRepos: function() {
+    let index = getIndexFromDisk();
+    if(index === null) {
+      logger.log('error', `Listing requires a repo index file. Run command 'repo --refresh'.`);
+    }
+
+    let table = new Table({
+      head: ['Repository Name', 'Project', 'Description'],
+      colWidths: [35, 20, 60],
+      chars: {
+        'top': '', 'top-mid': '', 'top-left': '', 'top-right': '',
+        'bottom': '-', 'bottom-mid': '', 'bottom-left': '', 'bottom-right': '',
+        'left': '', 'left-mid': '', 'mid': '', 'mid-mid': '',
+        'right': '', 'right-mid': '', 'middle': ' ',
+      },
+      style: {'head': ['green'], 'padding-left': 0, 'padding-right': 0}
+    });
+
+    index.repos.map((r) => {
+      let o = [
+        r.name,
+        r.project.key,
+        r.description,
+      ];
+      table.push(o);
+    });
+
+    console.log(table.toString());
   },
 };
 

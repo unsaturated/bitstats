@@ -24,6 +24,10 @@ if(program.refresh) {
   repo.refresh();
 }
 
+if(program.list) {
+  repo.listRepos();
+}
+
 // TODO
 // https://developer.atlassian.com/bitbucket/api/2/reference/resource/repositories
 // Endpoints of interest
