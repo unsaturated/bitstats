@@ -58,6 +58,7 @@ module.exports = {
         'Authorization': `Bearer ${token.access_token}`,
       },
       gzip: true,
+      json: true,
     };
 
     const cloneOptionsWithToken = (opt, updatedToken) => {
@@ -81,9 +82,8 @@ module.exports = {
         logger.log('debug', `Fetching ${options.url} ...`);
         return req(options)
           .then((body) => {
-            const info = JSON.parse(body);
-            let nextUrl = getNextPageUrl(info);
-            repoIndexObj.repos = [...repoIndexObj.repos, ...info.values];
+            let nextUrl = getNextPageUrl(body);
+            repoIndexObj.repos = [...repoIndexObj.repos, ...body.values];
             if(nextUrl !== null) {
               options.url = nextUrl;
               requestPage(options);
@@ -168,7 +168,8 @@ module.exports = {
    */
   listRepos: function(projects) {
     let index = getIndexFromDisk();
-    if(index === null) {
+    logger.log('debug', index);
+    if(index === null || !index.repos) {
       logger.log('error', `Listing requires a repo index file. Run command 'repo --refresh'.`);
     }
 
@@ -232,6 +233,7 @@ const getIndexFromDisk = () => {
         result = JSON.parse(data);
       }
     } catch(err) {
+      result = null;
       logger.log('error', `Unparseable repo data in file '${filePath}'. Run 'repo -c' then 'repo -r' to reset.`);
     }
   }
