@@ -2,30 +2,25 @@
  * Entry point for the bitstats 'repo' command.
  */
 const program = require('commander');
-const repo = require('./repo/repo');
+const repo = require('./bitstats-repo/repo');
 
 program
-  .option('-a, --all', 'all PRs')
+  .command('list', 'lists repositories')
   .option('-c, --clear', 'removes repository index')
-  .option('-r, --repos', 'gets repository index')
-  .option('-l, --list', 'list repository index')
-  .option('--refresh', 'refreshes local index file')
+  .option('-g, --get', 'gets repository index')
+  .option('-r, --refresh', 'refreshes local index file')
   .parse(process.argv);
 
 if(program.clear) {
   repo.clear();
 }
 
-if(program.repos) {
+if(program.get) {
   repo.getRepos();
 }
 
 if(program.refresh) {
   repo.refresh();
-}
-
-if(program.list) {
-  repo.listRepos();
 }
 
 // TODO

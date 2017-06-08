@@ -10,6 +10,6 @@ const program = require('commander');
 program
   .description(pkg.description)
   .version(pkg.version)
-  .command('repo [name]', 'Repository peer review stats')
+  .command('repo', 'Repository list and peer review stats')
   .command('setup', 'Setup authentication with Bitbucket')
   .parse(process.argv);

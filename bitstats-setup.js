@@ -2,7 +2,7 @@
  * Entry point for the bitstats 'setup' command.
  */
 const program = require('commander');
-const setup = require('./setup/setup');
+const setup = require('./bitstats-setup/setup');
 const logger = require('./config').logger;
 
 program

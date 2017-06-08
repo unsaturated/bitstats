@@ -4,7 +4,7 @@
 const logger = require('../config').logger;
 const bitbucket = require('../config').bitbucket;
 const repos = require('../config').repositories;
-const setup = require('../setup/setup');
+const setup = require('../bitstats-setup/setup');
 const fs = require('fs');
 const path = require('path');
 const request = require('request-promise');
@@ -70,7 +70,6 @@ module.exports = {
      * Uses request to fetch a page of data.
      * @param {object} req request instance
      * @param {object} options request options (verb, headers, etc)
-     * @return {object} repository index object
      */
     const requestRepos = (req, options) => {
       let repoIndexObj = {
@@ -163,7 +162,11 @@ module.exports = {
     this.getRepos();
   },
 
-  listRepos: function() {
+  /**
+   * Displays a list of repositories found in the Bitbucket account.
+   * @param {Array} projects filter and display only repositories matching these projects (case insensitive)
+   */
+  listRepos: function(projects) {
     let index = getIndexFromDisk();
     if(index === null) {
       logger.log('error', `Listing requires a repo index file. Run command 'repo --refresh'.`);
@@ -178,10 +181,24 @@ module.exports = {
         'left': '', 'left-mid': '', 'mid': '', 'mid-mid': '',
         'right': '', 'right-mid': '', 'middle': ' ',
       },
-      style: {'head': ['green'], 'padding-left': 0, 'padding-right': 0}
+      style: {'head': ['green'], 'padding-left': 0, 'padding-right': 0},
     });
 
-    index.repos.map((r) => {
+    // Filter out repositories not matching one of the projects specified
+    let regexCondition = null;
+    let filtered = index.repos;
+    if(projects && projects.length) {
+      regexCondition = new RegExp(projects.join('|'), 'i');
+      filtered = _.filter(index.repos, (o) => {
+        if(regexCondition) {
+          return regexCondition.test(o.project.key);
+        }
+        return true;
+      });
+    }
+
+    // Only return the data that matters
+    filtered.map((r) => {
       let o = [
         r.name,
         r.project.key,
