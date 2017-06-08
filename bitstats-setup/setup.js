@@ -221,15 +221,16 @@ module.exports = {
           if (err) {
             let msg = `Could not write access token to file '${filePath}'`;
             logger.log('error', msg);
+            reject(err);
           }
+          logger.log('debug', 'Token refreshed and saved.');
+          resolve(data);
         });
       };
 
       request(oauthOptions)
         .then((body) => {
           writeToken(body);
-          logger.log('debug', 'Token refreshed and saved.');
-          resolve(body);
         })
         .catch((err) => {
           logger.log('error', err);

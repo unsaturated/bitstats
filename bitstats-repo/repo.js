@@ -173,7 +173,7 @@ module.exports = {
     }
 
     let table = new Table({
-      head: ['Repository Name', 'Project', 'Description'],
+      head: ['Repository Slug', 'Project', 'Description'],
       colWidths: [35, 20, 60],
       chars: {
         'top': '', 'top-mid': '', 'top-left': '', 'top-right': '',
@@ -200,7 +200,7 @@ module.exports = {
     // Only return the data that matters
     filtered.map((r) => {
       let o = [
-        r.name,
+        r.slug,
         r.project.key,
         r.description,
       ];
