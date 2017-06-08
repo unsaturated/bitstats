@@ -12,6 +12,9 @@ const request = require('request-promise');
 
 module.exports = {
 
+  /**
+   * Clears (deletes) all credential information serialized to disk.
+   */
   clear: function() {
     const filesToDelete = [
       path.join(creds.directory, creds.fileNameAuth),
@@ -82,7 +85,7 @@ module.exports = {
     };
 
     const writeResponses = () => {
-      createDataDir();
+      createDir(creds.directory);
 
       const data = (prompts.map((q) => {
         return q.answer;
@@ -132,14 +135,6 @@ module.exports = {
    * Fetches and serializes a new or refreshed OAuth access token.
    */
   setToken: function() {
-    // const options = {
-    //   method: 'GET',
-    //   url: 'https://api.bitbucket.org/2.0/repositories/madmobile',
-    //   headers: {
-    //     'Authorization': auth,
-    //   },
-    // };
-
     const credValues = this.getCredentials();
     if (credValues === null) {
       logger.log('error', `Credential file was not found. Run the 'setup' command to create one.`);
@@ -161,7 +156,7 @@ module.exports = {
     };
 
     const writeToken = (data) => {
-      createDataDir();
+      createDir(creds.directory);
 
       const filePath = path.join(creds.directory, creds.fileNameToken);
 
@@ -219,10 +214,11 @@ const isCleanValue = (value) => {
 
 /**
  * Creates the user's data directory if it does not exist.
+ * @param {string} dir directory to create
  */
-const createDataDir = () => {
+const createDir = (dir) => {
   // Create directory if not exists
-  if (!fs.existsSync(creds.directory)) {
-    fs.mkdirSync(creds.directory);
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir);
   }
 };
