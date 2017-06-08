@@ -9,7 +9,9 @@
   "author": "Matthew Crumley",
   "license": "UNLICENSED",
   "dependencies": {
+    "cli-table": "^0.3.1",
     "commander": "^2.9.0",
+    "lodash": "^4.17.4",
     "request": "^2.81.0",
     "request-promise": "^4.2.0",
     "winston": "^2.3.1"
