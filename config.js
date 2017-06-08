@@ -42,14 +42,14 @@ const bitbucket = {
 };
 
 const creds = {
-  fileNameAuth: '.bitstats-oauth',
-  fileNameToken: '.bitstats-token',
-  directory: os.homedir(),
+  fileNameAuth: 'bitstats-oauth',
+  fileNameToken: 'bitstats-token',
+  directory: path.join(os.homedir(), '.bitstats', 'creds'),
 };
 
 const repo = {
-  fileNameReposIndex: '.bitstats-repos',
-  directory: path.join(os.homedir(), '.bitstats-data'),
+  fileNameReposIndex: 'bitstats-repos',
+  directory: path.join(os.homedir(), '.bitstats', 'data'),
 };
 
 /**
