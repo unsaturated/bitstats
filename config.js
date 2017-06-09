@@ -34,6 +34,7 @@ const bitbucket = {
   api: {
     baseUrl: 'https://api.bitbucket.org/2.0',
     repositories: 'https://api.bitbucket.org/2.0/repositories/madmobile',
+    pullrequests: 'https://api.bitbucket.org/2.0/repositories/madmobile/{repo_slug}/pullrequests',
   },
   oauth: {
     baseUrl: 'https://bitbucket.org/site/oauth2',
@@ -54,7 +55,7 @@ const repo = {
 
 const pr = {
   fileNamePatternPrIndex: 'bitstats-pr-{#}.json',
-  directory: path.join(os.homedir(), '.bitstats', 'data', 'pr'),
+  directory: path.join(os.homedir(), '.bitstats', 'data', 'pr', 'repo_slug'),
 };
 
 /**
