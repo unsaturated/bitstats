@@ -6,7 +6,7 @@ const setup = require('./bitstats-setup/setup');
 const logger = require('./config').logger;
 
 program
-  .description('Sets, clears, or displays the OAuth values used for authentication')
+  .description('Sets, clears, or displays the OAuth values used for authentication.')
   .option('-c, --clear', 'removes all settings')
   .option('-s, --set', 'sets or overwrites credentails')
   .option('-g, --get', 'gets the current credentials')
