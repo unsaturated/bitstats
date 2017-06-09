@@ -9,8 +9,9 @@ const fs = require('fs-extra');
 const path = require('path');
 const request = require('request-promise');
 const readline = require('readline');
-const _ = require('lodash');
-const Table = require('cli-table');
+// const _ = require('lodash');
+// const Table = require('cli-table');
+const {URL, URLSearchParams} = require('url');
 
 module.exports = {
 
@@ -19,10 +20,7 @@ module.exports = {
    * @param {string} repoSlug name of the repo
    */
   clear: function(repoSlug) {
-    if(!repoSlug || !repoSlug.length) {
-      logger.log('error', 'You must specifiy a repository to clear.');
-      process.exit(1);
-    }
+    exitOnInvalidRepoSlug(repoSlug);
 
     let repoSlugCleaned = arrayHeadOrValue(repoSlug);
 
@@ -46,7 +44,141 @@ module.exports = {
     }
   },
 
+  /**
+   * Fetches pull request data from Bitbucket and serializes to disk.
+   *
+   * Only MERGED PRs are serialized as all others are assumed to be in flux.
+   * Future development will open up analysis to the
+   * from the Bitbucket API.
+   * @param {string} repoSlug repository to fetch PRs for
+   */
+  refresh: function(repoSlug) {
+    exitOnInvalidRepoSlug(repoSlug);
 
+    let repoSlugCleaned = arrayHeadOrValue(repoSlug);
+
+    let token = setup.getToken();
+
+    if(token === null) {
+      logger.log('error', `PR fetch requires an OAuth access token. Run command 'setup -t'.`);
+      process.exit(1);
+    }
+
+    // Construct the URL - currently only supports MERGED PRs
+    const prUrl = new URL(bitbucket.api.pullrequests.replace('{repo_slug}', repoSlugCleaned));
+    prUrl.searchParams.append('state', 'MERGED');
+
+    const options = {
+      method: 'GET',
+      url: prUrl.href,
+      headers: {
+        'Authorization': `Bearer ${token.access_token}`,
+      },
+      gzip: true,
+      json: true,
+    };
+
+    const cloneOptionsWithToken = (opt, updatedToken) => {
+      let clonedOpt = Object.assign({}, opt);
+      clonedOpt.headers.Authorization = `Bearer ${updatedToken.access_token}`;
+      return clonedOpt;
+    };
+
+    /**
+     * Uses request to fetch a page of data.
+     * @param {object} req request instance
+     * @param {object} options request options (verb, headers, etc)
+     */
+    const requestPrs = (req, options) => {
+      const originalOptions = Object.assign({}, options);
+
+      const requestPage = (options) => {
+        logger.log('debug', `Fetching ${options.url} ...`);
+        return req(options)
+          .then((body) => {
+            let nextUrl = getNextPageUrl(body);
+
+            // Extract each PR and write to separate file
+            for(let singlePr of body.values) {
+              writeResponses(repoSlugCleaned, singlePr);
+            }
+
+            if(nextUrl !== null) {
+              options.url = nextUrl;
+              requestPage(options);
+            }
+          });
+      };
+
+      requestPage(options)
+        .then(() => {
+          // TODO : What should this function return?
+          // return prIndexObj;
+        })
+        .catch((err) => {
+          if (err.statusCode === 401) {
+            logger.log('debug', 'Access token rejected. Refreshing it now.');
+            setup.refreshToken()
+              .then((refreshedToken) => {
+                let updatedOptionsWithToken = cloneOptionsWithToken(originalOptions, refreshedToken);
+                logger.log('debug', 'New access token received. Retrying PR request.');
+                // Use original options but with new token
+                requestPage(updatedOptionsWithToken);
+              });
+          } if (err.statusCode === 404) {
+            logger.log('error', 'That repository no longer exists or has moved.');
+          } else {
+            logger.log('error', err);
+          }
+        });
+    };
+
+    /**
+     * Gets next page URL from response.
+     * @param {Object} data /repositories response.
+     * @return {String|Null} Url of next page or null
+     */
+    const getNextPageUrl = (data) => {
+      let result = null;
+      if(data && data.pagelen > 1 && data.next) {
+        result = data.next;
+      }
+      return result;
+    };
+
+    /**
+     * Writes data to the PR index file.
+     * @param {string} repoSlug repository slug to use for subdirectory
+     * @param {object} data JSON to serialize for a single PR
+     */
+    const writeResponses = (repoSlug, data) => {
+      const dir = prConfig.directory.replace('repo_slug', repoSlug);
+
+      createDirSync(dir);
+
+      const prNum = data.id;
+
+      const filePath = path.join(dir, prConfig.fileNamePatternPrIndex.replace('{#}', prNum));
+
+      fs.writeFile(filePath, JSON.stringify(data), (err) => {
+        if (err) {
+          let msg = `Could not write PR index to file '${filePath}'`;
+          logger.log('error', msg);
+        }
+      });
+    };
+
+    requestPrs(request, options);
+
+    // TODO : Return the
+    // // Make the request for data if not available locally
+    // let index = getIndexFromDisk();
+    // if(index === null) {
+    //   index = requestPrs(request, options);
+    // }
+    //
+    // return index;
+  },
 };
 
 /**
@@ -56,7 +188,6 @@ module.exports = {
  * @return {Object|Null} PR index object, null if not found
  */
 const getIndexFromDisk = (repoSlug, prNum) => {
-
   if(!repoSlug || !repoSlug.length) {
     logger.log('error', 'Repository slug is invalid.');
     process.exit(1);
@@ -67,7 +198,7 @@ const getIndexFromDisk = (repoSlug, prNum) => {
     process.exit(1);
   }
 
-  const filePath = path.join(repos.directory, repoSlug, repos.fileNameReposIndex.replace('#', prNum));
+  const filePath = path.join(prConfig.directory, repoSlug, prConfig.fileNamePatternPrIndex.replace('#', prNum));
   let result = null;
 
   if (fs.existsSync(filePath)) {
@@ -92,7 +223,7 @@ const getIndexFromDisk = (repoSlug, prNum) => {
 const createDirSync = (dir) => {
   // Create directory if not exists
   if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir);
+    fs.ensureDirSync(dir);
   }
 };
 
@@ -103,10 +234,7 @@ const createDirSync = (dir) => {
  */
 const isCleanYes = (value) => {
   const valueRegex = /^[y|yes]$/i;
-  if(valueRegex.test(value.toString())){
-    return true;
-  }
-  return false;
+  return valueRegex.test(value.toString());
 };
 
 /**
@@ -121,5 +249,16 @@ const arrayHeadOrValue = (input) => {
     return input[0];
   } else {
     return input.toString().trim();
+  }
+};
+
+/**
+ * Checks the repository slug to ensure it's a valid string and exist if not.
+ * @param {string} repoSlug repository slug
+ */
+const exitOnInvalidRepoSlug = (repoSlug) => {
+  if(!repoSlug || !repoSlug.length) {
+    logger.log('error', 'You must specifiy a repository.');
+    process.exit(1);
   }
 };
