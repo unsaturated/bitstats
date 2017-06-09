@@ -218,7 +218,7 @@ module.exports = {
 
         const filePath = path.join(creds.directory, creds.fileNameToken);
 
-        fs.writeFile(filePath, data, (err) => {
+        fs.writeFile(filePath, JSON.stringify(data), (err) => {
           if (err) {
             let msg = `Could not write access token to file '${filePath}'`;
             logger.log('error', msg);
