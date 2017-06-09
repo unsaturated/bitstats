@@ -210,6 +210,7 @@ module.exports = {
           sendImmediately: true,
         },
         body: data,
+        json: true,
       };
 
       const writeToken = (data) => {
