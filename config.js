@@ -52,6 +52,11 @@ const repo = {
   directory: path.join(os.homedir(), '.bitstats', 'data'),
 };
 
+const pr = {
+  fileNamePatternPrIndex: 'bitstats-pr-{#}.json',
+  directory: path.join(os.homedir(), '.bitstats', 'data', 'pr'),
+};
+
 /**
  * Common application logger.
  */
@@ -68,6 +73,12 @@ module.exports.credentials = creds;
  * @type {{fileNameRepos: string, directory: *}}
  */
 module.exports.repositories = repo;
+
+/**
+ * Peer review settings.
+ * @type {{fileNamePatternPrIndex: string, directory: *}}
+ */
+module.exports.pr = pr;
 
 /**
  * Bitbucket configuration.
