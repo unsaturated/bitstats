@@ -55,7 +55,8 @@ const repo = {
 
 const pr = {
   fileNamePatternPrIndex: 'bitstats-pr-{#}.json',
-  directory: path.join(os.homedir(), '.bitstats', 'data', 'pr', 'repo_slug'),
+  fileNamePatternPrRegex: /bitstats\-pr\-(\d+)\.json/i,
+  directory: path.join(os.homedir(), '.bitstats', 'data', 'pr', '{repo_slug}'),
 };
 
 /**

@@ -11,7 +11,7 @@ const request = require('request-promise');
 const readline = require('readline');
 // const _ = require('lodash');
 // const Table = require('cli-table');
-const {URL, URLSearchParams} = require('url');
+const {URL} = require('url');
 
 module.exports = {
 
@@ -24,7 +24,7 @@ module.exports = {
 
     let repoSlugCleaned = arrayHeadOrValue(repoSlug);
 
-    const dirToDelete = path.join(prConfig.directory, repoSlugCleaned);
+    const dirToDelete = path.join(prConfig.directory.replace('{repo_slug}', repoSlugCleaned));
 
     if (fs.existsSync(dirToDelete)) {
       const rl = readline.createInterface({
@@ -66,11 +66,24 @@ module.exports = {
 
     // Construct the URL - currently only supports MERGED PRs
     const prUrl = new URL(bitbucket.api.pullrequests.replace('{repo_slug}', repoSlugCleaned));
-    prUrl.searchParams.append('state', 'MERGED');
+    let url = prUrl.href;
+
+    // Append the weird Atlassian way
+    url += '?q=state="MERGED"';
+
+    // Fetch only the new PRs, not ones already cached
+    const minMaxIds = getHighestPullRequestIdFromDisk(repoSlugCleaned);
+    if(minMaxIds !== null) {
+      // No way to '.append' with operators other than '='
+      url += ` AND id>${minMaxIds.max}`;
+    } else {
+      // We're not filtering by id, so ensure the results are sorted
+      url += ' AND sort="id"';
+    }
 
     const options = {
       method: 'GET',
-      url: prUrl.href,
+      url: encodeURI(url),
       headers: {
         'Authorization': `Bearer ${token.access_token}`,
       },
@@ -100,7 +113,14 @@ module.exports = {
 
             // Extract each PR and write to separate file
             for(let singlePr of body.values) {
-              writeResponses(repoSlugCleaned, singlePr);
+              // Only write outside the bounds of current ids on disk
+              if(minMaxIds !== null) {
+                if(singlePr.id < minMaxIds.min || singlePr.id > minMaxIds.max) {
+                  writeResponse(repoSlugCleaned, singlePr);
+                }
+              } else {
+                writeResponse(repoSlugCleaned, singlePr);
+              }
             }
 
             if(nextUrl !== null) {
@@ -151,8 +171,8 @@ module.exports = {
      * @param {string} repoSlug repository slug to use for subdirectory
      * @param {object} data JSON to serialize for a single PR
      */
-    const writeResponses = (repoSlug, data) => {
-      const dir = prConfig.directory.replace('repo_slug', repoSlug);
+    const writeResponse = (repoSlug, data) => {
+      const dir = prConfig.directory.replace('{repo_slug}', repoSlug);
 
       createDirSync(dir);
 
@@ -169,16 +189,42 @@ module.exports = {
     };
 
     requestPrs(request, options);
-
-    // TODO : Return the
-    // // Make the request for data if not available locally
-    // let index = getIndexFromDisk();
-    // if(index === null) {
-    //   index = requestPrs(request, options);
-    // }
-    //
-    // return index;
   },
+};
+
+/**
+ * Gets the highest and lowest pull request ID from the disk.
+ *
+ * @param {string} repoSlug repository slug
+ * @return {Object|Null} PR index object, null if not found
+ */
+const getHighestPullRequestIdFromDisk = (repoSlug) => {
+  if(!repoSlug || !repoSlug.length) {
+    logger.log('error', 'Repository slug is invalid.');
+    process.exit(1);
+  }
+
+  const filePath = path.join(prConfig.directory.replace('{repo_slug}', repoSlug));
+
+  if (fs.existsSync(filePath)) {
+    let reg = prConfig.fileNamePatternPrRegex;
+    let ids = [];
+    const fileList = fs.readdirSync(filePath);
+    fileList.forEach((f) => {
+      let regResult = reg.exec(f);
+      if(regResult != null) {
+        ids.push(Number.parseInt(regResult[1], 10));
+      }
+    });
+    if(ids.length) {
+      let retObj = {
+        min: Math.min(...ids),
+        max: Math.max(...ids),
+      };
+      return retObj;
+    }
+  }
+  return null;
 };
 
 /**
@@ -198,7 +244,9 @@ const getIndexFromDisk = (repoSlug, prNum) => {
     process.exit(1);
   }
 
-  const filePath = path.join(prConfig.directory, repoSlug, prConfig.fileNamePatternPrIndex.replace('#', prNum));
+  const filePath = path.join(
+    prConfig.directory.replace('{repo_slug}', repoSlug),
+    prConfig.fileNamePatternPrIndex.replace('{#}', prNum));
   let result = null;
 
   if (fs.existsSync(filePath)) {
