@@ -1,11 +1,11 @@
 /**
- * Created by mcrumley on 6/8/17.
+ * Entry point for the bitstats 'repo list' command.
  */
 const program = require('commander');
 const repo = require('./bitstats-repo/repo');
 
 program
-  .description('Lists all repositories in Bitbucket, or those for specific project.')
+  .description('Lists all repositories or those for specific project.')
   .usage('[options] <project ...>')
   .parse(process.argv);
 

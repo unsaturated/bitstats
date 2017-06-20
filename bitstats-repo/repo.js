@@ -39,6 +39,28 @@ module.exports = {
   },
 
   /**
+   * Gets the summary doc for a specific repository.
+   *
+   * This will trigger an index fetch if none exists.
+   *
+   * @param {String} name name of the repository
+   * @return {Object} repository summary
+   */
+  getRepoByName: function(name) {
+    let index = this.getRepos();
+    if(index === null) {
+      logger.log('error', 'No repository index was found.');
+    }
+    let repo = _.find(index.repos, {name: name});
+    if(!repo) {
+      logger.log('error', `No repository named ${name} was found.`);
+      process.exit(1);
+    } else {
+      return repo;
+    }
+  },
+
+  /**
    * Gets the repository index from disk or (if not found) fetches it
    * from the Bitbucket API.
    * @return {object} repository index object
@@ -169,7 +191,8 @@ module.exports = {
   listRepos: function(projects) {
     let index = getIndexFromDisk();
     if(index === null || !index.repos) {
-      logger.log('error', `Listing requires a repo index file. Run command 'repo --refresh'.`);
+      logger.log('error', `Listing requires a repo index file. Run command 'repo index'.`);
+      process.exit(1);
     }
 
     let table = new Table({

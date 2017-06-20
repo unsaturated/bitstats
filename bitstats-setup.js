@@ -7,10 +7,9 @@ const logger = require('./config').logger;
 
 program
   .description('Sets, clears, or displays the OAuth values used for authentication.')
-  .option('-c, --clear', 'removes all settings')
-  .option('-s, --set', 'sets or overwrites credentails')
-  .option('-g, --get', 'gets the current credentials')
-  .option('-t, --token', 'retrieves/refreshes OAuth access token')
+  .command('clear', 'removes all credentials and tokens')
+  .command('creds', 'gets or sets the current credentials')
+  .command('token', 'retrieves/refreshes OAuth access token')
   .parse(process.argv);
 
 if (program.clear) {

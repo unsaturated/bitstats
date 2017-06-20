@@ -2,9 +2,9 @@
  * Created by mcrumley on 6/9/17.
  */
 const logger = require('../config').logger;
-const bitbucket = require('../config').bitbucket;
 const prConfig = require('../config').pr;
 const setup = require('../bitstats-setup/setup');
+const repo = require('../bitstats-repo/repo');
 const fs = require('fs-extra');
 const path = require('path');
 const request = require('request-promise');
@@ -45,6 +45,21 @@ module.exports = {
   },
 
   /**
+   * Determines if PR data is indexed for the specified repository.
+   * @param {String} repoSlug repository to query
+   * @return {Boolean} true if PR directory exists
+   */
+  hasPrData: function(repoSlug) {
+    exitOnInvalidRepoSlug(repoSlug);
+
+    let repoSlugCleaned = arrayHeadOrValue(repoSlug);
+
+    const filePath = path.join(prConfig.directory.replace('{repo_slug}', repoSlugCleaned));
+
+    return fs.existsSync(filePath);
+  },
+
+  /**
    * Fetches pull request data from Bitbucket and serializes to disk.
    *
    * Only MERGED PRs are serialized as all others are assumed to be in flux.
@@ -65,7 +80,10 @@ module.exports = {
     }
 
     // Construct the URL - currently only supports MERGED PRs
-    const prUrl = new URL(bitbucket.api.pullrequests.replace('{repo_slug}', repoSlugCleaned));
+    const repoObj = repo.getRepoByName(repoSlugCleaned);
+    const prUrl = new URL(repoObj.links.pullrequests.href);
+    // TODO : Remove old way of getting hrefs (stuffing the config full)
+    // const prUrl = new URL(bitbucket.api.pullrequests.replace('{repo_slug}', repoSlugCleaned));
     let url = prUrl.href;
 
     // Append the weird Atlassian way
@@ -76,9 +94,6 @@ module.exports = {
     if(minMaxIds !== null) {
       // No way to '.append' with operators other than '='
       url += ` AND id>${minMaxIds.max}`;
-    } else {
-      // We're not filtering by id, so ensure the results are sorted
-      url += ' AND sort="id"';
     }
 
     const options = {
@@ -217,11 +232,10 @@ const getHighestPullRequestIdFromDisk = (repoSlug) => {
       }
     });
     if(ids.length) {
-      let retObj = {
+      return {
         min: Math.min(...ids),
         max: Math.max(...ids),
       };
-      return retObj;
     }
   }
   return null;

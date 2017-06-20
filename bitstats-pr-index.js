@@ -1,19 +1,13 @@
 /**
- * Created by mcrumley on 6/9/17.
+ * Entry point for the bitstats 'pr index' command.
  */
 const program = require('commander');
 const pr = require('./bitstats-pr/pr');
 
 program
-  .description('Creates, updates, or removes the pull request cache indexes.')
-  .option('-c, --clear', 'removes local PR cache for a repository')
-  .option('-r, --refresh', 'fetches/refreshes PR cache')
+  .description('Creates or updates the pull request cache indexes.')
+  .usage('<repo>')
   .parse(process.argv);
 
-if(program.clear) {
-  pr.clear(program.args);
-}
-
-if(program.refresh) {
-  pr.refresh(program.args);
-}
+// Pass in all arguments but `refresh` currently only handles one repo index
+pr.refresh(program.args);
