@@ -1,6 +1,7 @@
 /**
- * Created by mcrumley on 6/9/17.
+ * Module to process all pull request data.
  */
+
 const logger = require('../config').logger;
 const prConfig = require('../config').pr;
 const setup = require('../bitstats-setup/setup');
@@ -9,11 +10,53 @@ const fs = require('fs-extra');
 const path = require('path');
 const request = require('request-promise');
 const readline = require('readline');
-// const _ = require('lodash');
-// const Table = require('cli-table');
 const {URL} = require('url');
+const _ = require('lodash');
+const json2csv = require('json2csv');
 
 module.exports = {
+
+  /**
+   * Exports the PR data for a repository to a CSV file.
+   * @param {String} repoSlug repository slug
+   * @param {String} [fileName=reposlug-pr.csv] file name to write
+   */
+  export: function(repoSlug, fileName=`${repoSlug}-pr.csv`) {
+    exitOnInvalidRepoSlug(repoSlug);
+    let repoSlugCleaned = arrayHeadOrValue(repoSlug);
+    let result = getFileListOfAllPullRequests(repoSlugCleaned);
+    if(result !== null) {
+      let exportArray = [];
+      for(let fObj of result) {
+        let fileData = JSON.parse(fs.readFileSync(fObj.path));
+        exportArray.push({
+          id: _.has(fileData, 'id') ? fileData.id : null,
+          author_display_name: _.has(fileData, 'author.display_name') ? fileData.author.display_name : null,
+          closed_by_display_name: _.has(fileData, 'closed_by.display_name') ? fileData.closed_by.display_name : null,
+          comment_count: _.has(fileData, 'comment_count') ? fileData.comment_count : 0,
+          created_on: _.has(fileData, 'created_on') ? fileData.created_on : null,
+          destination_branch_name: _.has(fileData, 'destination.branch.name') ? fileData.destination.branch.name : null,
+          source_branch_name: _.has(fileData, 'source.branch.name') ? fileData.source.branch.name : null,
+          state: _.has(fileData, 'state') ? fileData.state : null,
+          title: _.has(fileData, 'title') ? fileData.title : null,
+          updated_on: _.has(fileData, 'updated_on') ? fileData.updated_on : null,
+        });
+      }
+      let dataForSerialization = json2csv({
+        data: exportArray,
+        fields: Object.keys(_.head(exportArray)),
+      });
+      fs.writeFile(fileName, dataForSerialization, (err) => {
+        if(err) {
+          logger.log('error', `Could not serialize PR data to file '${fileName}'.`);
+        } else {
+          logger.log('info', `PR data exported to '${fileName}'.`);
+        }
+      });
+    } else {
+      logger.log('info', 'No PRs data to export.');
+    }
+  },
 
   /**
    * Clears (deletes) all PR information serialized to disk.
@@ -62,9 +105,6 @@ module.exports = {
   /**
    * Fetches pull request data from Bitbucket and serializes to disk.
    *
-   * Only MERGED PRs are serialized as all others are assumed to be in flux.
-   * Future development will open up analysis to the
-   * from the Bitbucket API.
    * @param {string} repoSlug repository to fetch PRs for
    */
   refresh: function(repoSlug) {
@@ -87,7 +127,7 @@ module.exports = {
     let url = prUrl.href;
 
     // Append the weird Atlassian way
-    url += '?q=state="MERGED"';
+    url += '?q=(state="MERGED" OR state="OPEN" OR state="DECLINED")';
 
     // Fetch only the new PRs, not ones already cached
     const minMaxIds = getHighestPullRequestIdFromDisk(repoSlugCleaned);
@@ -163,7 +203,7 @@ module.exports = {
           } if (err.statusCode === 404) {
             logger.log('error', 'That repository no longer exists or has moved.');
           } else {
-            logger.log('error', err);
+            logger.log('error', err.message);
           }
         });
     };
@@ -236,6 +276,46 @@ const getHighestPullRequestIdFromDisk = (repoSlug) => {
         min: Math.min(...ids),
         max: Math.max(...ids),
       };
+    }
+  }
+  return null;
+};
+
+/**
+ * Gets the file listing for all PRs on disk for a given repository.
+ *
+ * This performs a regular expression check on each file to ensure only
+ * expected files are included in the listing (i.e. no README or dot files).
+ * They files are returned sorted by PR id number in an object with
+ * properties `index` and `path`.
+ *
+ * @param {string} repoSlug repository slug
+ * @return {Array|Null} Full file list or null if none found
+ */
+const getFileListOfAllPullRequests = (repoSlug) => {
+  if(!repoSlug || !repoSlug.length) {
+    logger.log('error', 'Repository slug is invalid.');
+    process.exit(1);
+  }
+
+  const filePath = path.join(prConfig.directory.replace('{repo_slug}', repoSlug));
+
+  if (fs.existsSync(filePath)) {
+    let reg = prConfig.fileNamePatternPrRegex;
+    let files = [];
+    const fileList = fs.readdirSync(filePath);
+    fileList.forEach((f) => {
+      let regResult = reg.exec(f);
+      if(regResult != null) {
+        let o = {
+          index: Number.parseInt(regResult[1], 10),
+          path: path.join(filePath, f),
+        };
+        files.push(o);
+      }
+    });
+    if(files.length) {
+      return _.sortBy(files, 'index');
     }
   }
   return null;

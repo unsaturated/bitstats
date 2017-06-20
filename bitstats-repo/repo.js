@@ -132,7 +132,7 @@ module.exports = {
                 requestPage(updatedOptionsWithToken);
               });
           } else {
-            logger.log('error', err);
+            logger.log('error', err.message);
           }
         });
     };
