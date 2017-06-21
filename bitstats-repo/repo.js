@@ -212,6 +212,9 @@ module.exports = {
     let regexCondition = null;
     let filtered = index.repos;
     if(projects && projects.length) {
+      projects = projects.map((p) => {
+        return `^${p}$`;
+      });
       regexCondition = new RegExp(projects.join('|'), 'i');
       filtered = _.filter(index.repos, (o) => {
         if(regexCondition) {
