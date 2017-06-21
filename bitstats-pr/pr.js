@@ -21,8 +21,9 @@ module.exports = {
    * Exports the PR data for a repository to a CSV file.
    * @param {String} repoSlug repository slug
    * @param {String} [fileName=reposlug-pr.csv] file name to write
+   * @param {Function} [exportDone] export operation is done
    */
-  export: function(repoSlug, fileName=`${repoSlug}-pr.csv`) {
+  export: function(repoSlug, fileName=`${repoSlug}-pr.csv`, exportDone) {
     exitOnInvalidRepoSlug(repoSlug);
     let repoSlugCleaned = arrayHeadOrValue(repoSlug);
     let result = getFileListOfAllPullRequests(repoSlugCleaned);
@@ -53,9 +54,55 @@ module.exports = {
         } else {
           logger.log('info', `PR data exported to '${fileName}'.`);
         }
+        if(exportDone && typeof exportDone === 'function') {
+          exportDone();
+        }
       });
     } else {
       logger.log('info', 'No PRs data to export.');
+    }
+  },
+
+  /**
+   * Exports the PR comment data for a repository to a CSV file.
+   * @param {String} repoSlug repository slug
+   * @param {String} [fileName=reposlug-comment.csv] file name to write
+   * @param {Function} [exportDone] export operation is done
+   */
+  exportComments: function(repoSlug, fileName=`${repoSlug}-comment.csv`, exportDone) {
+    exitOnInvalidRepoSlug(repoSlug);
+    let repoSlugCleaned = arrayHeadOrValue(repoSlug);
+    let result = getFileListOfAllPullRequests(repoSlugCleaned, true);
+    if(result !== null) {
+      let exportArray = [];
+      for(let fObj of result) {
+        let fileData = JSON.parse(fs.readFileSync(fObj.path));
+        exportArray.push({
+          pullrequest_id: _.has(fileData, 'pullrequest.id') ? fileData.pullrequest.id : null,
+          author_display_name: _.has(fileData, 'user.display_name') ? fileData.user.display_name : null,
+          is_reply: _.has(fileData, 'parent.id') ? true : null,
+          is_inline: _.has(fileData, 'inline') ? true : null,
+          created_on: _.has(fileData, 'created_on') ? fileData.created_on : null,
+          title: _.has(fileData, 'pullrequest.title') ? fileData.pullrequest.title : null,
+          word_count: _.has(fileData, 'content.raw') ? fileData.content.raw.match(/\S+/g).length : 0,
+        });
+      }
+      let dataForSerialization = json2csv({
+        data: exportArray,
+        fields: Object.keys(_.head(exportArray)),
+      });
+      fs.writeFile(fileName, dataForSerialization, (err) => {
+        if(err) {
+          logger.log('error', `Could not serialize comment data to file '${fileName}'.`);
+        } else {
+          logger.log('info', `PR comments exported to '${fileName}'.`);
+        }
+        if(exportDone && typeof exportDone === 'function') {
+          exportDone();
+        }
+      });
+    } else {
+      logger.log('info', 'No comment data to export.');
     }
   },
 
@@ -111,7 +158,7 @@ module.exports = {
    * dump the PR index and refresh.
    *
    * @param {string} repoSlug repository to fetch PRs for
-   * @param {Function} refreshDone function called when refresh is complete
+   * @param {Function} [refreshDone] function called when refresh is complete
    */
   refresh: function(repoSlug, refreshDone) {
     exitOnInvalidRepoSlug(repoSlug);
@@ -243,7 +290,7 @@ module.exports = {
    * dump the PR index and refresh.
    *
    * @param {string} repoSlug repository to fetch PRs for
-   * @param {Function} refreshDone function called when refresh is complete
+   * @param {Function} [refreshDone] function called when refresh is complete
    */
   refreshComments: function(repoSlug, refreshDone) {
     exitOnInvalidRepoSlug(repoSlug);
@@ -483,18 +530,27 @@ const getHighestPullRequestIdFromDisk = (repoSlug, forComments) => {
  * properties `index` and `path`.
  *
  * @param {string} repoSlug repository slug
+ * @param {boolean} [forComments] set to true if the search is comment-specific
  * @return {Array|Null} Full file list or null if none found
  */
-const getFileListOfAllPullRequests = (repoSlug) => {
+const getFileListOfAllPullRequests = (repoSlug, forComments) => {
   if(!repoSlug || !repoSlug.length) {
     logger.log('error', 'Repository slug is invalid.');
     process.exit(1);
   }
 
-  const filePath = path.join(prConfig.directory.replace('{repo_slug}', repoSlug));
+  let filePath = null;
+  let reg = null;
+
+  if(forComments) {
+    filePath = path.join(prConfig.directory.replace('{repo_slug}', repoSlug));
+    reg = prConfig.fileNamePatternPrRegex;
+  } else {
+    filePath = path.join(prConfig.commentsDirectory.replace('{repo_slug}', repoSlug));
+    reg = prConfig.fileNamePatternPrCommentRegex;
+  }
 
   if (fs.existsSync(filePath)) {
-    let reg = prConfig.fileNamePatternPrRegex;
     let files = [];
     const fileList = fs.readdirSync(filePath);
     fileList.forEach((f) => {
