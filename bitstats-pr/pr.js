@@ -111,6 +111,7 @@ module.exports = {
    * dump the PR index and refresh.
    *
    * @param {string} repoSlug repository to fetch PRs for
+   * @param {Function} refreshDone function called when refresh is complete
    */
   refresh: function(repoSlug, refreshDone) {
     exitOnInvalidRepoSlug(repoSlug);
@@ -242,6 +243,7 @@ module.exports = {
    * dump the PR index and refresh.
    *
    * @param {string} repoSlug repository to fetch PRs for
+   * @param {Function} refreshDone function called when refresh is complete
    */
   refreshComments: function(repoSlug, refreshDone) {
     exitOnInvalidRepoSlug(repoSlug);
