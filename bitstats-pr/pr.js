@@ -80,8 +80,8 @@ module.exports = {
         exportArray.push({
           pullrequest_id: _.has(fileData, 'pullrequest.id') ? fileData.pullrequest.id : null,
           author_display_name: _.has(fileData, 'user.display_name') ? fileData.user.display_name : null,
-          is_reply: _.has(fileData, 'parent.id') ? true : null,
-          is_inline: _.has(fileData, 'inline') ? true : null,
+          is_reply: _.has(fileData, 'parent.id') ? true : false,
+          is_inline: _.has(fileData, 'inline') ? true : false,
           created_on: _.has(fileData, 'created_on') ? fileData.created_on : null,
           title: _.has(fileData, 'pullrequest.title') ? fileData.pullrequest.title : null,
           word_count: _.has(fileData, 'content.raw') ? fileData.content.raw.match(/\S+/g).length : 0,
@@ -543,11 +543,11 @@ const getFileListOfAllPullRequests = (repoSlug, forComments) => {
   let reg = null;
 
   if(forComments) {
-    filePath = path.join(prConfig.directory.replace('{repo_slug}', repoSlug));
-    reg = prConfig.fileNamePatternPrRegex;
-  } else {
     filePath = path.join(prConfig.commentsDirectory.replace('{repo_slug}', repoSlug));
     reg = prConfig.fileNamePatternPrCommentRegex;
+  } else {
+    filePath = path.join(prConfig.directory.replace('{repo_slug}', repoSlug));
+    reg = prConfig.fileNamePatternPrRegex;
   }
 
   if (fs.existsSync(filePath)) {
