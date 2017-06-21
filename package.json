@@ -9,6 +9,7 @@
   "author": "Matthew Crumley",
   "license": "UNLICENSED",
   "dependencies": {
+    "async": "^2.4.1",
     "cli-table": "^0.3.1",
     "commander": "^2.9.0",
     "fs-extra": "^3.0.1",
