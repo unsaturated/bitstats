@@ -81,6 +81,7 @@ module.exports = {
       },
       gzip: true,
       json: true,
+      rejectUnauthorized: false,
     };
 
     const cloneOptionsWithToken = (opt, updatedToken) => {

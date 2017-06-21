@@ -153,6 +153,7 @@ module.exports = {
         sendImmediately: true,
       },
       body: 'grant_type=client_credentials',
+      rejectUnauthorized: false,
     };
 
     const writeToken = (data) => {
@@ -211,6 +212,7 @@ module.exports = {
         },
         body: data,
         json: true,
+        rejectUnauthorized: false,
       };
 
       const writeToken = (data) => {

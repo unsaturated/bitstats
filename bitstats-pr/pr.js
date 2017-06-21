@@ -13,6 +13,7 @@ const readline = require('readline');
 const {URL} = require('url');
 const _ = require('lodash');
 const json2csv = require('json2csv');
+const async = require('async');
 
 module.exports = {
 
@@ -105,9 +106,13 @@ module.exports = {
   /**
    * Fetches pull request data from Bitbucket and serializes to disk.
    *
+   * This function will only fetch newer PRs from Bitbucket. It will not
+   * update existing PRs. To fully update the index, the only way is to
+   * dump the PR index and refresh.
+   *
    * @param {string} repoSlug repository to fetch PRs for
    */
-  refresh: function(repoSlug) {
+  refresh: function(repoSlug, refreshDone) {
     exitOnInvalidRepoSlug(repoSlug);
 
     let repoSlugCleaned = arrayHeadOrValue(repoSlug);
@@ -122,8 +127,6 @@ module.exports = {
     // Construct the URL - currently only supports MERGED PRs
     const repoObj = repo.getRepoByName(repoSlugCleaned);
     const prUrl = new URL(repoObj.links.pullrequests.href);
-    // TODO : Remove old way of getting hrefs (stuffing the config full)
-    // const prUrl = new URL(bitbucket.api.pullrequests.replace('{repo_slug}', repoSlugCleaned));
     let url = prUrl.href;
 
     // Append the weird Atlassian way
@@ -144,12 +147,7 @@ module.exports = {
       },
       gzip: true,
       json: true,
-    };
-
-    const cloneOptionsWithToken = (opt, updatedToken) => {
-      let clonedOpt = Object.assign({}, opt);
-      clonedOpt.headers.Authorization = `Bearer ${updatedToken.access_token}`;
-      return clonedOpt;
+      rejectUnauthorized: false,
     };
 
     /**
@@ -181,6 +179,10 @@ module.exports = {
             if(nextUrl !== null) {
               options.url = nextUrl;
               requestPage(options);
+            } else {
+              if (refreshDone && typeof refreshDone === 'function') {
+                refreshDone();
+              }
             }
           });
       };
@@ -188,7 +190,6 @@ module.exports = {
       requestPage(options)
         .then(() => {
           // TODO : What should this function return?
-          // return prIndexObj;
         })
         .catch((err) => {
           if (err.statusCode === 401) {
@@ -206,19 +207,6 @@ module.exports = {
             logger.log('error', err.message);
           }
         });
-    };
-
-    /**
-     * Gets next page URL from response.
-     * @param {Object} data /repositories response.
-     * @return {String|Null} Url of next page or null
-     */
-    const getNextPageUrl = (data) => {
-      let result = null;
-      if(data && data.pagelen > 1 && data.next) {
-        result = data.next;
-      }
-      return result;
     };
 
     /**
@@ -245,39 +233,242 @@ module.exports = {
 
     requestPrs(request, options);
   },
+
+  /**
+   * Fetches pull request data from Bitbucket and serializes to disk.
+   *
+   * This function will only fetch newer PRs from Bitbucket. It will not
+   * update existing PRs. To fully update the index, the only way is to
+   * dump the PR index and refresh.
+   *
+   * @param {string} repoSlug repository to fetch PRs for
+   */
+  refreshComments: function(repoSlug, refreshDone) {
+    exitOnInvalidRepoSlug(repoSlug);
+
+    let repoSlugCleaned = arrayHeadOrValue(repoSlug);
+
+    let token = setup.getToken();
+
+    if(token === null) {
+      logger.log('error', `PR fetch requires an OAuth access token. Run command 'setup token'.`);
+      process.exit(1);
+    }
+
+    // What PRs do we have?
+    const minMaxPr = getHighestPullRequestIdFromDisk(repoSlugCleaned);
+
+    if(minMaxPr === null) {
+      logger.log('info', 'No PRs are available for this repository.');
+      process.exit(0);
+    }
+
+    // What PRs do we have for comments?
+    const minMaxPrForComment = getHighestPullRequestIdFromDisk(repoSlugCleaned, true);
+
+    let commentRangeToFetch = null;
+
+    // No min/max for the comments means we have to fetch all comments according to available PRs
+    if(minMaxPrForComment === null) {
+      commentRangeToFetch = {
+        min: minMaxPr.min,
+        max: minMaxPr.max,
+      };
+    } else {
+      // What PR comments do we need to fetch?
+      // Minimum is the difference; maximum can be no higher than the PR itself
+      commentRangeToFetch = {
+        min: Math.min(minMaxPr.max, minMaxPrForComment.max),
+        max: minMaxPr.max,
+      };
+    }
+
+    // Must we fetch any data? If the difference between the min and max is zero, then we do not.
+    if( (commentRangeToFetch.max - commentRangeToFetch.min) > 0) {
+      // Get the PR id so we can fetch the comments for each
+
+      let prId = commentRangeToFetch.min;
+
+      async.whilst(
+        function() {
+          return prId <= commentRangeToFetch.max;
+        },
+        function(whilstCallback) {
+          let prData = getIndexFromDisk(repoSlugCleaned, prId);
+
+          const options = {
+            method: 'GET',
+            url: encodeURI(prData.links.comments.href),
+            headers: {
+              'Authorization': `Bearer ${token.access_token}`,
+            },
+            gzip: true,
+            json: true,
+            rejectUnauthorized: false,
+          };
+
+          /**
+           * Uses request to fetch a page of data.
+           * @param {object} req request instance
+           * @param {object} options request options (verb, headers, etc)
+           */
+          const requestPrComments = (req, options) => {
+            const originalOptions = Object.assign({}, options);
+
+            const requestPage = (options) => {
+              logger.log('debug', `Fetching ${options.url} ...`);
+              return req(options)
+                .then((body) => {
+                  let nextUrl = getNextPageUrl(body);
+
+                  // Extract each PR comment and write to separate file
+                  for (let singlePrComment of body.values) {
+                    writeCommentResponse(repoSlugCleaned, prId, singlePrComment);
+                  }
+
+                  if (nextUrl !== null) {
+                    options.url = nextUrl;
+                    requestPage(options);
+                  } else {
+                    whilstCallback(null, prId++);
+                  }
+                });
+            };
+
+            requestPage(options)
+              .then(() => {
+                // TODO : Oh no? What should we do with this?
+              })
+              .catch((err) => {
+                if (err.statusCode === 401) {
+                  logger.log('debug', 'Access token rejected. Refreshing it now.');
+                  setup.refreshToken()
+                    .then((refreshedToken) => {
+                      let updatedOptionsWithToken = cloneOptionsWithToken(originalOptions, refreshedToken);
+                      token = refreshedToken;
+                      logger.log('debug', 'New access token received. Retrying PR request.');
+                      // Use original options but with new token
+                      requestPage(updatedOptionsWithToken);
+                    });
+                }
+                if (err.statusCode === 404) {
+                  logger.log('error', 'That repository no longer exists or has moved.');
+                } else {
+                  logger.log('error', err.message);
+                }
+              });
+          };
+
+          /**
+           * Writes data to the PR comment index file.
+           * @param {string} repoSlug repository slug to use for subdirectory
+           * @param {number} prNum pull request number/id
+           * @param {object} data JSON to serialize for a single PR
+           */
+          const writeCommentResponse = (repoSlug, prNum, data) => {
+            const dir = prConfig.commentsDirectory.replace('{repo_slug}', repoSlug);
+
+            createDirSync(dir);
+
+            const comNum = data.id;
+
+            const filePath = path.join(dir, prConfig.fileNamePatternPrCommentIndex.replace('{pr#}', prNum).replace('{com#}', comNum));
+
+            fs.writeFile(filePath, JSON.stringify(data), (err) => {
+              if (err) {
+                let msg = `Could not write PR comment index to file '${filePath}'`;
+                logger.log('error', msg);
+              }
+            });
+          };
+
+          requestPrComments(request, options);
+        },
+        function(err, data) {
+          if (refreshDone && typeof refreshDone === 'function') {
+            refreshDone();
+          }
+        });
+    } else {
+      logger.log('info', 'No PR comments to fetch.');
+    }
+  },
+};
+
+/**
+ * Creates a clone of a request options object and modifies its Authorization header.
+ * @param {Object} opt options object
+ * @param {Object} updatedToken token object
+ * @return {Object} new object instance
+ */
+const cloneOptionsWithToken = (opt, updatedToken) => {
+  let clonedOpt = Object.assign({}, opt);
+  clonedOpt.headers.Authorization = `Bearer ${updatedToken.access_token}`;
+  return clonedOpt;
+};
+
+/**
+ * Gets next page URL from response.
+ * @param {Object} data /repositories response.
+ * @return {String|Null} Url of next page or null
+ */
+const getNextPageUrl = (data) => {
+  let result = null;
+  if(data && data.pagelen > 1 && data.next) {
+    result = data.next;
+  }
+  return result;
 };
 
 /**
  * Gets the highest and lowest pull request ID from the disk.
  *
+ * It's possible a PR is indexed without comments, or that a refresh only needs
+ * to fetch comments for the newest PRs. For that situation, this function
+ * can optionally search for existing PR comments indexed to disk.
+ *
+ * For example, the PRs for ID 1,2,3,4,5 may be indexed. However, the comments
+ * only for PRs 1,2,3 may exist. Omitting `forComments` will return min/max of 1,5.
+ * Setting `forComments` will return min/max of 1,3.
+ *
  * @param {string} repoSlug repository slug
+ * @param {boolean} [forComments] set to true if the search is comment-specific
  * @return {Object|Null} PR index object, null if not found
  */
-const getHighestPullRequestIdFromDisk = (repoSlug) => {
+const getHighestPullRequestIdFromDisk = (repoSlug, forComments) => {
   if(!repoSlug || !repoSlug.length) {
     logger.log('error', 'Repository slug is invalid.');
     process.exit(1);
   }
 
-  const filePath = path.join(prConfig.directory.replace('{repo_slug}', repoSlug));
+  let filePath = null;
+  let reg = null;
+
+  if(forComments) {
+    filePath = path.join(prConfig.commentsDirectory.replace('{repo_slug}', repoSlug));
+    reg = prConfig.fileNamePatternPrCommentRegex;
+  } else {
+    filePath = path.join(prConfig.directory.replace('{repo_slug}', repoSlug));
+    reg = prConfig.fileNamePatternPrRegex;
+  }
 
   if (fs.existsSync(filePath)) {
-    let reg = prConfig.fileNamePatternPrRegex;
     let ids = [];
     const fileList = fs.readdirSync(filePath);
     fileList.forEach((f) => {
       let regResult = reg.exec(f);
-      if(regResult != null) {
+      if (regResult != null) {
         ids.push(Number.parseInt(regResult[1], 10));
       }
     });
-    if(ids.length) {
+    if (ids.length) {
       return {
         min: Math.min(...ids),
         max: Math.max(...ids),
       };
     }
   }
+
   return null;
 };
 
