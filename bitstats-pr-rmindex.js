@@ -5,7 +5,7 @@ const program = require('commander');
 const pr = require('./bitstats-pr/pr');
 
 program
-  .description('Removes the pull request cache indexes.')
+  .description('Removes the pull request cache indexes, including comments.')
   .usage('<repo>')
   .parse(process.argv);
 
