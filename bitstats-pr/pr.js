@@ -81,6 +81,7 @@ module.exports = {
           pullrequest_id: _.has(fileData, 'pullrequest.id') ? fileData.pullrequest.id : null,
           author_display_name: _.has(fileData, 'user.display_name') ? fileData.user.display_name : null,
           is_reply: _.has(fileData, 'parent.id') ? true : false,
+          is_pr_author: _.has(fileData, 'is_pr_author') ? fileData.is_pr_author : null,
           is_inline: _.has(fileData, 'inline') ? true : false,
           created_on: _.has(fileData, 'created_on') ? fileData.created_on : null,
           title: _.has(fileData, 'pullrequest.title') ? fileData.pullrequest.title : null,
@@ -213,25 +214,34 @@ module.exports = {
             let nextUrl = getNextPageUrl(body);
 
             // Extract each PR and write to separate file
-            for(let singlePr of body.values) {
-              // Only write outside the bounds of current ids on disk
-              if(minMaxIds !== null) {
-                if(singlePr.id < minMaxIds.min || singlePr.id > minMaxIds.max) {
-                  writeResponse(repoSlugCleaned, singlePr);
-                }
-              } else {
-                writeResponse(repoSlugCleaned, singlePr);
-              }
-            }
+            // No need to preserve "body" so we'll pop the array
 
-            if(nextUrl !== null) {
-              options.url = nextUrl;
-              requestPage(options);
-            } else {
-              if (refreshDone && typeof refreshDone === 'function') {
-                refreshDone();
-              }
-            }
+            async.whilst(
+              function() {
+                return body.values.length > 0;
+              },
+              function(whilstCallback) {
+                let singlePr = body.values.pop();
+
+                // Only write outside the bounds of current ids on disk
+                if(minMaxIds !== null) {
+                  if(singlePr.id < minMaxIds.min || singlePr.id > minMaxIds.max) {
+                    writeResponse(repoSlugCleaned, singlePr, whilstCallback);
+                  }
+                } else {
+                  writeResponse(repoSlugCleaned, singlePr, whilstCallback);
+                }
+              },
+              function(err, data) {
+                if(nextUrl !== null) {
+                  options.url = nextUrl;
+                  requestPage(options);
+                } else {
+                  if (refreshDone && typeof refreshDone === 'function') {
+                    refreshDone();
+                  }
+                }
+              });
           });
       };
 
@@ -261,8 +271,9 @@ module.exports = {
      * Writes data to the PR index file.
      * @param {string} repoSlug repository slug to use for subdirectory
      * @param {object} data JSON to serialize for a single PR
+     * @param {Function} [writeDone] function called when write is complete
      */
-    const writeResponse = (repoSlug, data) => {
+    const writeResponse = (repoSlug, data, writeDone) => {
       const dir = prConfig.directory.replace('{repo_slug}', repoSlug);
 
       createDirSync(dir);
@@ -275,6 +286,9 @@ module.exports = {
         if (err) {
           let msg = `Could not write PR index to file '${filePath}'`;
           logger.log('error', msg);
+        }
+        if(writeDone && typeof writeDone === 'function') {
+          writeDone();
         }
       });
     };
@@ -370,17 +384,28 @@ module.exports = {
                 .then((body) => {
                   let nextUrl = getNextPageUrl(body);
 
-                  // Extract each PR comment and write to separate file
-                  for (let singlePrComment of body.values) {
-                    writeCommentResponse(repoSlugCleaned, prId, singlePrComment);
-                  }
+                  // Extract each PR and write to separate file
+                  // No need to preserve "body" so we'll pop the array
 
-                  if (nextUrl !== null) {
-                    options.url = nextUrl;
-                    requestPage(options);
-                  } else {
-                    whilstCallback(null, prId++);
-                  }
+                  async.whilst(
+                    function() {
+                      return body.values.length > 0;
+                    },
+                    function(whilstWriteCallback) {
+                      let singlePrComment = body.values.pop();
+
+                      // Extract each PR comment and write to separate file
+                      writeCommentResponse(repoSlugCleaned, prId, singlePrComment, whilstWriteCallback);
+                    },
+                    function(err, data) {
+                      if (nextUrl !== null) {
+                        options.url = nextUrl;
+                        requestPage(options);
+                      } else {
+                        prId++;
+                        whilstCallback();
+                      }
+                    });
                 });
             };
 
@@ -413,20 +438,31 @@ module.exports = {
            * @param {string} repoSlug repository slug to use for subdirectory
            * @param {number} prNum pull request number/id
            * @param {object} data JSON to serialize for a single PR
+           * @param {Function} [writeDone] function called when write is complete
            */
-          const writeCommentResponse = (repoSlug, prNum, data) => {
+          const writeCommentResponse = (repoSlug, prNum, data, writeDone) => {
             const dir = prConfig.commentsDirectory.replace('{repo_slug}', repoSlug);
 
             createDirSync(dir);
 
             const comNum = data.id;
 
-            const filePath = path.join(dir, prConfig.fileNamePatternPrCommentIndex.replace('{pr#}', prNum).replace('{com#}', comNum));
+            // Amend the serialized data
+            // This is the fastest way to trace a commenter back to who created the PR
+            data.is_pr_author = (prData.author.display_name === data.user.display_name);
+
+            const filePath = path.join(dir,
+              prConfig.fileNamePatternPrCommentIndex
+                .replace('{pr#}', prNum)
+                .replace('{com#}', comNum));
 
             fs.writeFile(filePath, JSON.stringify(data), (err) => {
               if (err) {
                 let msg = `Could not write PR comment index to file '${filePath}'`;
                 logger.log('error', msg);
+              }
+              if(writeDone && typeof writeDone === 'function') {
+                writeDone();
               }
             });
           };
