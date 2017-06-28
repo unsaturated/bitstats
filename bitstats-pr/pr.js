@@ -97,7 +97,6 @@ module.exports = {
           is_pr_author: _.has(fileData, 'is_pr_author') ? fileData.is_pr_author : null,
           is_inline: _.has(fileData, 'inline') ? true : false,
           created_on: _.has(fileData, 'created_on') ? fileData.created_on : null,
-          title: _.has(fileData, 'pullrequest.title') ? fileData.pullrequest.title : null,
           word_count: _.has(fileData, 'content.raw') ? fileData.content.raw.match(/\S+/g).length : 0,
         });
       }
@@ -146,9 +145,11 @@ module.exports = {
           exportArray.push({
             pullrequest_id: fObj.index,
             author_display_name: _.has(commit, 'author.user.display_name') ? commit.author.user.display_name : null,
+            hash: _.has(commit, 'hash') ? commit.hash : null,
             is_pr_author: _.has(commit, 'is_pr_author') ? commit.is_pr_author : null,
             date: _.has(commit, 'date') ? commit.date : null,
             word_count: _.has(commit, 'message') ? commit.message.match(/\S+/g).length : 0,
+            is_merge: _.has(commit, 'parents') ? (commit.parents.length > 1) : false,
             tickets: tickets.length ? tickets : null,
           });
         }
