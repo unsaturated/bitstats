@@ -7,13 +7,16 @@ const pr = require('./bitstats-pr/pr');
 program
   .description('Creates or updates the pull request cache indexes.')
   .usage('[options] <repo>')
-  .option('-c, --comments', 'fetches comments for all PRs')
+  .option('-m, --comments', 'fetches comments/messages for all PRs')
+  .option('-c, --commits', 'fetches abbreviated git commits for all PRs')
   .parse(process.argv);
 
 // Pass in all arguments but `refresh` currently only handles one repo index
 pr.refresh(program.args, () => {
-// Fetch the comments too
-  if(program.comments) {
+  if(program.messages) {
     pr.refreshComments(program.args);
+  }
+  if(program.commits) {
+    pr.refreshCommits(program.args);
   }
 });

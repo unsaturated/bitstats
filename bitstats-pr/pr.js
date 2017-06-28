@@ -64,7 +64,10 @@ module.exports = {
   },
 
   /**
-   * Exports the PR comment data for a repository to a CSV file.
+   * Exports comment data for a specific repository to a CSV file.
+   *
+   * Each pull request has its comments fetched if not found locally.
+   *
    * @param {String} repoSlug repository slug
    * @param {String} [fileName=reposlug-comment.csv] file name to write
    * @param {Function} [exportDone] export operation is done
@@ -105,6 +108,19 @@ module.exports = {
     } else {
       logger.log('info', 'No comment data to export.');
     }
+  },
+
+  /**
+   * Exports commit data for a specific repository to a CSV file.
+   *
+   * Each pull request has its commits fetched if not found locally.
+   *
+   * @param {String} repoSlug repository slug
+   * @param {String} [fileName=reposlug-commit.csv] file name to write
+   * @param {Function} [exportDone] export operation is done
+   */
+  exportCommits: function(repoSlug, fileName=`${repoSlug}-commit.csv`, exportDone) {
+    // TODO Export commits
   },
 
   /**
@@ -297,11 +313,11 @@ module.exports = {
   },
 
   /**
-   * Fetches pull request data from Bitbucket and serializes to disk.
+   * Fetches comment data from Bitbucket and serializes to disk.
    *
-   * This function will only fetch newer PRs from Bitbucket. It will not
-   * update existing PRs. To fully update the index, the only way is to
-   * dump the PR index and refresh.
+   * This function will only fetch newer PR comments from Bitbucket.
+   * It will not update existing PRs or comments. To fully update
+   * the index, the only way is to dump the PR index and refresh.
    *
    * @param {string} repoSlug repository to fetch PRs for
    * @param {Function} [refreshDone] function called when refresh is complete
@@ -327,7 +343,7 @@ module.exports = {
     }
 
     // What PRs do we have for comments?
-    const minMaxPrForComment = getHighestPullRequestIdFromDisk(repoSlugCleaned, true);
+    const minMaxPrForComment = getHighestPullRequestIdFromDisk(repoSlugCleaned, 'comments');
 
     let commentRangeToFetch = null;
 
@@ -478,6 +494,190 @@ module.exports = {
       logger.log('info', 'No PR comments to fetch.');
     }
   },
+
+  /**
+   * Fetches commit data from Bitbucket and serializes to disk.
+   *
+   * This function will only fetch new commits from Bitbucket. It will not
+   * update existing commits (how would those change anyway?). To fully
+   * update the index, the only way is to dump the PR index and refresh.
+   *
+   * @param {string} repoSlug repository to fetch commits for
+   * @param {Function} [refreshDone] function called when refresh is complete
+   */
+  refreshCommits: function(repoSlug, refreshDone) {
+    exitOnInvalidRepoSlug(repoSlug);
+
+    let repoSlugCleaned = arrayHeadOrValue(repoSlug);
+
+    let token = setup.getToken();
+
+    if(token === null) {
+      logger.log('error', `Commit fetch requires an OAuth access token. Run command 'setup token'.`);
+      process.exit(1);
+    }
+
+    // What PRs do we have?
+    const minMaxPr = getHighestPullRequestIdFromDisk(repoSlugCleaned);
+
+    if(minMaxPr === null) {
+      logger.log('info', 'No PRs are available for this repository.');
+      process.exit(0);
+    }
+
+    // What PRs do we have for commits?
+    const minMaxPrForComment = getHighestPullRequestIdFromDisk(repoSlugCleaned, 'commits');
+
+    let commitRangeToFetch = null;
+
+    // No min/max for the commits means we have to fetch all commits according to available PRs
+    if(minMaxPrForComment === null) {
+      commitRangeToFetch = {
+        min: minMaxPr.min,
+        max: minMaxPr.max,
+      };
+    } else {
+      // What PR commits do we need to fetch?
+      // Minimum is the difference; maximum can be no higher than the PR itself
+      commitRangeToFetch = {
+        min: Math.min(minMaxPr.max, minMaxPrForComment.max),
+        max: minMaxPr.max,
+      };
+    }
+
+    // Must we fetch any data? If the difference between the min and max is zero, then we do not.
+    if( (commitRangeToFetch.max - commitRangeToFetch.min) > 0) {
+      // Get the PR id so we can fetch the commits for each
+
+      let prId = commitRangeToFetch.min;
+
+      async.whilst(
+        function() {
+          return prId <= commitRangeToFetch.max;
+        },
+        function(whilstCallback) {
+          let prData = getIndexFromDisk(repoSlugCleaned, prId);
+
+          const options = {
+            method: 'GET',
+            url: encodeURI(prData.links.commits.href),
+            headers: {
+              'Authorization': `Bearer ${token.access_token}`,
+            },
+            gzip: true,
+            json: true,
+            rejectUnauthorized: false,
+          };
+
+          /**
+           * Uses request to fetch a page of data.
+           * @param {object} req request instance
+           * @param {object} options request options (verb, headers, etc)
+           */
+          const requestPrCommits = (req, options) => {
+            const originalOptions = Object.assign({}, options);
+            let commitIndexObj = {
+              commits: [],
+            };
+
+            const requestPage = (options) => {
+              logger.log('debug', `Fetching ${options.url} ...`);
+              return req(options)
+                .then((body) => {
+                  let nextUrl = getNextPageUrl(body);
+                  let commits = [];
+
+                  // Amend the serialized data
+                  // This is the fastest way to trace a commiter back to who created the PR
+                  for(let commit of body.values) {
+                    commits.push( {
+                      hash: commit.hash,
+                      date: commit.date,
+                      message: commit.message,
+                      type: commit.type,
+                      author: commit.author.user.display_name,
+                      is_pr_author: (prData.author.display_name === commit.author.user.display_name),
+                    });
+                  }
+
+                  commitIndexObj.commits = [...commitIndexObj.commits, ...commits];
+                  if (nextUrl !== null) {
+                    options.url = nextUrl;
+                    requestPage(options);
+                  } else {
+                    prId++;
+                    writeCommitResponse(repoSlugCleaned, prData.id, commitIndexObj, whilstCallback);
+                  }
+                })
+                .catch((err) => {
+                    if (err.statusCode === 404) {
+                      logger.log('info', `Commits for PR #${prId} no longer exist; the branch was merged or deleted.`);
+                    }
+                    prId++;
+                    whilstCallback();
+                });
+            };
+
+            requestPage(options)
+              .then(() => {
+                // TODO : Oh no? What should we do with this?
+              })
+              .catch((err) => {
+                if (err.statusCode === 401) {
+                  logger.log('debug', 'Access token rejected. Refreshing it now.');
+                  setup.refreshToken()
+                    .then((refreshedToken) => {
+                      let updatedOptionsWithToken = cloneOptionsWithToken(originalOptions, refreshedToken);
+                      token = refreshedToken;
+                      logger.log('debug', 'New access token received. Retrying PR request.');
+                      // Use original options but with new token
+                      requestPage(updatedOptionsWithToken);
+                    });
+                }
+                else {
+                  logger.log('error', err.message);
+                }
+              });
+          };
+
+          /**
+           * Writes aggregated commit data for a single PR to an index file.
+           * @param {string} repoSlug repository slug to use for subdirectory
+           * @param {number} prNum pull request number/id
+           * @param {object} data JSON to serialize for a single commit
+           * @param {Function} [writeDone] function called when write is complete
+           */
+          const writeCommitResponse = (repoSlug, prNum, data, writeDone) => {
+            const dir = prConfig.commitsDirectory.replace('{repo_slug}', repoSlug);
+
+            createDirSync(dir);
+
+            const filePath = path.join(dir,
+              prConfig.fileNamePatternPrCommitIndex
+                .replace('{pr#}', prNum));
+
+            fs.writeFile(filePath, JSON.stringify(data), (err) => {
+              if (err) {
+                let msg = `Could not write PR commit index to file '${filePath}'`;
+                logger.log('error', msg);
+              }
+              if(writeDone && typeof writeDone === 'function') {
+                writeDone();
+              }
+            });
+          };
+
+          requestPrCommits(request, options);
+        },
+        function(err, data) {
+          if (refreshDone && typeof refreshDone === 'function') {
+            refreshDone();
+          }
+        });
+    } else {
+      logger.log('info', 'No PR commits to fetch.');
+    }
+  },
 };
 
 /**
@@ -513,14 +713,14 @@ const getNextPageUrl = (data) => {
  * can optionally search for existing PR comments indexed to disk.
  *
  * For example, the PRs for ID 1,2,3,4,5 may be indexed. However, the comments
- * only for PRs 1,2,3 may exist. Omitting `forComments` will return min/max of 1,5.
- * Setting `forComments` will return min/max of 1,3.
+ * only for PRs 1,2,3 may exist. Omitting `searchType` will return min/max of 1,5.
+ * Setting `searchType` will return min/max of 1,3.
  *
  * @param {string} repoSlug repository slug
- * @param {boolean} [forComments] set to true if the search is comment-specific
+ * @param {string} [searchType=""] set to "comments" or "commits" if the search is specific
  * @return {Object|Null} PR index object, null if not found
  */
-const getHighestPullRequestIdFromDisk = (repoSlug, forComments) => {
+const getHighestPullRequestIdFromDisk = (repoSlug, searchType) => {
   if(!repoSlug || !repoSlug.length) {
     logger.log('error', 'Repository slug is invalid.');
     process.exit(1);
@@ -529,9 +729,12 @@ const getHighestPullRequestIdFromDisk = (repoSlug, forComments) => {
   let filePath = null;
   let reg = null;
 
-  if(forComments) {
+  if(searchType && searchType.toLowerCase() === 'comments') {
     filePath = path.join(prConfig.commentsDirectory.replace('{repo_slug}', repoSlug));
     reg = prConfig.fileNamePatternPrCommentRegex;
+  } else if(searchType && searchType.toLowerCase() === 'commits') {
+    filePath = path.join(prConfig.commitsDirectory.replace('{repo_slug}', repoSlug));
+    reg = prConfig.fileNamePatternPrCommitRegex;
   } else {
     filePath = path.join(prConfig.directory.replace('{repo_slug}', repoSlug));
     reg = prConfig.fileNamePatternPrRegex;
