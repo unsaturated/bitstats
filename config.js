@@ -41,6 +41,10 @@ const bitbucket = {
   },
 };
 
+const jira = {
+  ticketRegExp: /[A-Z]{2,4}\-\d{1,5}/g,
+}
+
 const creds = {
   fileNameAuth: 'bitstats-oauth',
   fileNameToken: 'bitstats-token',
@@ -92,3 +96,9 @@ module.exports.pr = pr;
  * @type {{api: {baseUrl: string}, oauth: {baseUrl: string, accessTokenUrl: string}}}
  */
 module.exports.bitbucket = bitbucket;
+
+/**
+ * Jira configuration and options.
+ * @type {{ticketRegExp: RegExp}}
+ */
+module.exports.jira = jira;

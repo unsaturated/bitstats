@@ -4,6 +4,7 @@
 
 const logger = require('../config').logger;
 const prConfig = require('../config').pr;
+const jiraConfig = require('../config').jira;
 const setup = require('../bitstats-setup/setup');
 const repo = require('../bitstats-repo/repo');
 const fs = require('fs-extra');
@@ -31,6 +32,13 @@ module.exports = {
       let exportArray = [];
       for(let fObj of result) {
         let fileData = JSON.parse(fs.readFileSync(fObj.path));
+
+        // Get Jira ticket information (if any is available)
+        let title = _.has(fileData, 'title') ? fileData.title : null;
+        let description = _.has(fileData, 'description') ? fileData.description : null;
+        let titleAndDescription = (title || '') + (description || '');
+        let tickets = _.uniq(titleAndDescription.match(jiraConfig.ticketRegExp)).join(',');
+
         exportArray.push({
           id: _.has(fileData, 'id') ? fileData.id : null,
           author_display_name: _.has(fileData, 'author.display_name') ? fileData.author.display_name : null,
@@ -40,8 +48,10 @@ module.exports = {
           destination_branch_name: _.has(fileData, 'destination.branch.name') ? fileData.destination.branch.name : null,
           source_branch_name: _.has(fileData, 'source.branch.name') ? fileData.source.branch.name : null,
           state: _.has(fileData, 'state') ? fileData.state : null,
-          title: _.has(fileData, 'title') ? fileData.title : null,
+          title: title,
           updated_on: _.has(fileData, 'updated_on') ? fileData.updated_on : null,
+          word_count: titleAndDescription.match(/\S+/g).length,
+          tickets: tickets.length ? tickets : null,
         });
       }
       let dataForSerialization = json2csv({
@@ -75,7 +85,7 @@ module.exports = {
   exportComments: function(repoSlug, fileName=`${repoSlug}-comment.csv`, exportDone) {
     exitOnInvalidRepoSlug(repoSlug);
     let repoSlugCleaned = arrayHeadOrValue(repoSlug);
-    let result = getFileListOfAllPullRequests(repoSlugCleaned, true);
+    let result = getFileListOfAllPullRequests(repoSlugCleaned, 'comments');
     if(result !== null) {
       let exportArray = [];
       for(let fObj of result) {
@@ -120,7 +130,46 @@ module.exports = {
    * @param {Function} [exportDone] export operation is done
    */
   exportCommits: function(repoSlug, fileName=`${repoSlug}-commit.csv`, exportDone) {
-    // TODO Export commits
+    exitOnInvalidRepoSlug(repoSlug);
+    let repoSlugCleaned = arrayHeadOrValue(repoSlug);
+    let result = getFileListOfAllPullRequests(repoSlugCleaned, 'commits');
+    if(result !== null) {
+      let exportArray = [];
+      for(let fObj of result) {
+        let fileData = JSON.parse(fs.readFileSync(fObj.path));
+
+        for(let commit of fileData.commits) {
+          // Get Jira ticket information (if any is available)
+          let message = _.has(commit, 'message') ? commit.message : null;
+          let tickets = _.uniq(message.match(jiraConfig.ticketRegExp)).join(',');
+
+          exportArray.push({
+            pullrequest_id: fObj.index,
+            author_display_name: _.has(commit, 'author.user.display_name') ? commit.author.user.display_name : null,
+            is_pr_author: _.has(commit, 'is_pr_author') ? commit.is_pr_author : null,
+            date: _.has(commit, 'date') ? commit.date : null,
+            word_count: _.has(commit, 'message') ? commit.message.match(/\S+/g).length : 0,
+            tickets: tickets.length ? tickets : null,
+          });
+        }
+      }
+      let dataForSerialization = json2csv({
+        data: exportArray,
+        fields: Object.keys(_.head(exportArray)),
+      });
+      fs.writeFile(fileName, dataForSerialization, (err) => {
+        if(err) {
+          logger.log('error', `Could not serialize commit data to file '${fileName}'.`);
+        } else {
+          logger.log('info', `PR commits exported to '${fileName}'.`);
+        }
+        if(exportDone && typeof exportDone === 'function') {
+          exportDone();
+        }
+      });
+    } else {
+      logger.log('info', 'No commit data to export.');
+    }
   },
 
   /**
@@ -585,22 +634,17 @@ module.exports = {
               return req(options)
                 .then((body) => {
                   let nextUrl = getNextPageUrl(body);
-                  let commits = [];
 
                   // Amend the serialized data
                   // This is the fastest way to trace a commiter back to who created the PR
                   for(let commit of body.values) {
-                    commits.push( {
-                      hash: commit.hash,
-                      date: commit.date,
-                      message: commit.message,
-                      type: commit.type,
-                      author: commit.author.user.display_name,
-                      is_pr_author: (prData.author.display_name === commit.author.user.display_name),
-                    });
+                    commit.pullrequest = {
+                      id: prId,
+                    };
+                    commit.is_pr_author = (prData.author.display_name === commit.author.user.display_name);
                   }
 
-                  commitIndexObj.commits = [...commitIndexObj.commits, ...commits];
+                  commitIndexObj.commits = [...commitIndexObj.commits, ...body.values];
                   if (nextUrl !== null) {
                     options.url = nextUrl;
                     requestPage(options);
@@ -769,10 +813,10 @@ const getHighestPullRequestIdFromDisk = (repoSlug, searchType) => {
  * properties `index` and `path`.
  *
  * @param {string} repoSlug repository slug
- * @param {boolean} [forComments] set to true if the search is comment-specific
+ * @param {string} [searchType=""] set to "comments" or "commits" if the search is specific
  * @return {Array|Null} Full file list or null if none found
  */
-const getFileListOfAllPullRequests = (repoSlug, forComments) => {
+const getFileListOfAllPullRequests = (repoSlug, searchType) => {
   if(!repoSlug || !repoSlug.length) {
     logger.log('error', 'Repository slug is invalid.');
     process.exit(1);
@@ -781,9 +825,12 @@ const getFileListOfAllPullRequests = (repoSlug, forComments) => {
   let filePath = null;
   let reg = null;
 
-  if(forComments) {
+  if(searchType && searchType.toLowerCase() === 'comments') {
     filePath = path.join(prConfig.commentsDirectory.replace('{repo_slug}', repoSlug));
     reg = prConfig.fileNamePatternPrCommentRegex;
+  } else if(searchType && searchType.toLowerCase() === 'commits') {
+    filePath = path.join(prConfig.commitsDirectory.replace('{repo_slug}', repoSlug));
+    reg = prConfig.fileNamePatternPrCommitRegex;
   } else {
     filePath = path.join(prConfig.directory.replace('{repo_slug}', repoSlug));
     reg = prConfig.fileNamePatternPrRegex;
