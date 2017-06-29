@@ -14,7 +14,7 @@ program
 
 // Pass in all arguments but `refresh` currently only handles one repo index
 pr.refresh(program.args, () => {
-  if(program.messages) {
+  if(program.comments) {
     pr.refreshComments(program.args);
   }
   if(program.commits) {
