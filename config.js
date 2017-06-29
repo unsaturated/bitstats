@@ -59,13 +59,20 @@ const repo = {
 const pr = {
   fileNamePatternPrIndex: 'bitstats-pr-{#}.json',
   fileNamePatternPrRegex: /bitstats\-pr\-(\d+)\.json/i,
+
   fileNamePatternPrCommentIndex: 'bitstats-pr-{pr#}-comment-{com#}.json',
   fileNamePatternPrCommentRegex: /bitstats\-pr\-(\d+)\-comment\-(\d+)\.json/i,
+
   fileNamePatternPrCommitIndex: 'bitstats-pr-{pr#}-commits.json',
   fileNamePatternPrCommitRegex: /bitstats\-pr\-(\d+)\-commits\.json/i,
+
+  fileNamePatternPrApprovalIndex: 'bitstats-pr-{pr#}-approvals.json',
+  fileNamePatternPrApprovalRegex: /bitstats\-pr\-(\d+)\-approvals\.json/i,
+
   directory: path.join(os.homedir(), '.bitstats', 'data', 'pr', '{repo_slug}'),
   commentsDirectory: path.join(os.homedir(), '.bitstats', 'data', 'pr', '{repo_slug}', 'comments'),
   commitsDirectory: path.join(os.homedir(), '.bitstats', 'data', 'pr', '{repo_slug}', 'commits'),
+  approvalsDirectory: path.join(os.homedir(), '.bitstats', 'data', 'pr', '{repo_slug}', 'approvals'),
 };
 
 /**
