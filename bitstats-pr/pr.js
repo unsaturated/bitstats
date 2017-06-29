@@ -89,7 +89,7 @@ module.exports = {
       for(let fObj of result) {
         let fileData = JSON.parse(fs.readFileSync(fObj.path));
         exportArray.push({
-          pullrequest_id: _.has(fileData, 'pullrequest.id') ? fileData.pullrequest.id : null,
+          id: _.has(fileData, 'pullrequest.id') ? fileData.pullrequest.id : null,
           author_display_name: _.has(fileData, 'user.display_name') ? fileData.user.display_name : null,
           is_reply: _.has(fileData, 'parent.id') ? true : false,
           is_pr_author: _.has(fileData, 'is_pr_author') ? fileData.is_pr_author : null,
@@ -139,7 +139,7 @@ module.exports = {
           let tickets = _.uniq(message.match(jiraConfig.ticketRegExp)).join(',');
 
           exportArray.push({
-            pullrequest_id: fObj.index,
+            id: fObj.index,
             author_display_name: _.has(commit, 'author.user.display_name') ? commit.author.user.display_name : null,
             hash: _.has(commit, 'hash') ? commit.hash : null,
             is_pr_author: _.has(commit, 'is_pr_author') ? commit.is_pr_author : null,
@@ -187,7 +187,7 @@ module.exports = {
 
         for(let approvalData of fileData.approvals) {
           exportArray.push({
-            pullrequest_id: fObj.index,
+            id: fObj.index,
             author_display_name: _.has(approvalData, 'display_name') ? approvalData.display_name : null,
             is_pr_author: _.has(approvalData, 'is_pr_author') ? approvalData.is_pr_author : null,
             date: _.has(approvalData, 'date') ? approvalData.date : null,
