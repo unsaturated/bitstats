@@ -20,6 +20,7 @@ module.exports = {
 
   /**
    * Exports the PR data for a repository to a CSV file.
+   *
    * @param {String} repoSlug repository slug
    * @param {String} [fileName=reposlug-pr.csv] file name to write
    * @param {Function} [exportDone] export operation is done
@@ -75,8 +76,6 @@ module.exports = {
   /**
    * Exports comment data for a specific repository to a CSV file.
    *
-   * Each pull request has its comments fetched if not found locally.
-   *
    * @param {String} repoSlug repository slug
    * @param {String} [fileName=reposlug-comment.csv] file name to write
    * @param {Function} [exportDone] export operation is done
@@ -121,8 +120,6 @@ module.exports = {
   /**
    * Exports commit data for a specific repository to a CSV file.
    *
-   * Each pull request has its commits fetched if not found locally.
-   *
    * @param {String} repoSlug repository slug
    * @param {String} [fileName=reposlug-commit.csv] file name to write
    * @param {Function} [exportDone] export operation is done
@@ -150,6 +147,54 @@ module.exports = {
             word_count: _.has(commit, 'message') ? commit.message.match(/\S+/g).length : 0,
             is_merge: _.has(commit, 'parents') ? (commit.parents.length > 1) : false,
             tickets: tickets.length ? tickets : null,
+          });
+        }
+      }
+      let dataForSerialization = json2csv({
+        data: exportArray,
+        fields: Object.keys(_.head(exportArray)),
+      });
+      fs.writeFile(fileName, dataForSerialization, (err) => {
+        if(err) {
+          logger.log('error', `Could not serialize commit data to file '${fileName}'.`);
+        } else {
+          logger.log('info', `PR commits exported to '${fileName}'.`);
+        }
+        if(exportDone && typeof exportDone === 'function') {
+          exportDone();
+        }
+      });
+    } else {
+      logger.log('info', 'No commit data to export.');
+    }
+  },
+
+  /**
+   * Exports approval data for a specific repository to a CSV file.
+   *
+   * @param {String} repoSlug repository slug
+   * @param {String} [fileName=reposlug-approval.csv] file name to write
+   * @param {Function} [exportDone] export operation is done
+   */
+  exportApprovals: function(repoSlug, fileName=`${repoSlug}-approval.csv`, exportDone) {
+    exitOnInvalidRepoSlug(repoSlug);
+    let repoSlugCleaned = arrayHeadOrValue(repoSlug);
+    let result = getFileListOfAllPullRequests(repoSlugCleaned, 'approvals');
+    if(result !== null) {
+      let exportArray = [];
+      for(let fObj of result) {
+        let fileData = JSON.parse(fs.readFileSync(fObj.path));
+
+        for(let approvalData of fileData.approvals) {
+          exportArray.push({
+            pullrequest_id: fObj.index,
+            author_display_name: _.has(approvalData, 'display_name') ? approvalData.display_name : null,
+            is_pr_author: _.has(approvalData, 'is_pr_author') ? approvalData.is_pr_author : null,
+            date: _.has(approvalData, 'date') ? approvalData.date : null,
+            state: _.has(approvalData, 'state') ? approvalData.state : null,
+            is_approval: _.has(approvalData, 'is_approval') ? approvalData.is_approval : false,
+            is_declined: _.has(approvalData, 'is_declined') ? approvalData.is_declined : false,
+            is_update: _.has(approvalData, 'is_update') ? approvalData.is_update : false,
           });
         }
       }
