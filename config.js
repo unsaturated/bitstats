@@ -42,7 +42,7 @@ const bitbucket = {
 };
 
 const jira = {
-  ticketRegExp: /[A-Z]{2,4}\-\d{1,5}/g,
+  ticketRegExp: /[A-Z]{2,10}\-\d{1,5}/g,
 }
 
 const creds = {
