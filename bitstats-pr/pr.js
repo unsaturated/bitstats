@@ -262,6 +262,46 @@ module.exports = {
   },
 
   /**
+   * Fetches pull request data from Bitbucket for all repositories
+   * matching the project specified.
+   *
+   * @param {Array} projects list of projects of interest
+   * @param {Function} [refreshProjectDone] function called when refresh is complete
+   */
+  refreshProject: function(projects, refreshProjectDone) {
+    exitOnInvalidProjectSlug(projects);
+
+    const repoList = this.reposForProjects(projects);
+
+    if(!repoList.length) {
+      logger.log('error', `No repositories found for that project name. Run command 'repo list' to view.`);
+      process.exit(1);
+    }
+
+    let repoCount = repoList.length;
+    let reposDone = 0;
+
+    async.whilst(
+        function() {
+          return reposDone <= repoCount;
+        },
+        function(whilstCallback) {
+          let repoToIndex = repoList.pop();
+          logger.log('info', `Indexing repo '${repoToIndex.slug}'...`);
+          this.refresh(repoToIndex.slug, () => {
+            reposDone++;
+            whilstCallback();
+          });
+        },
+        function(err, data) {
+          if (refreshProjectDone && typeof refreshProjectDone === 'function') {
+            logger.log('info', `Done indexing for project '${_.head(projects)}'.`);
+            refreshProjectDone();
+          }
+        });
+  },
+
+  /**
    * Fetches pull request data from Bitbucket and serializes to disk.
    *
    * This function will only fetch newer PRs from Bitbucket. It will not
@@ -1202,6 +1242,17 @@ const arrayHeadOrValue = (input) => {
 const exitOnInvalidRepoSlug = (repoSlug) => {
   if(!repoSlug || !repoSlug.length) {
     logger.log('error', 'You must specifiy a repository.');
+    process.exit(1);
+  }
+};
+
+/**
+ * Checks the project slug to ensure it's a valid string and exist if not.
+ * @param {string} projSlug project slug
+ */
+const exitOnInvalidProjectSlug = (projSlug) => {
+  if(!projSlug || !projSlug.length) {
+    logger.log('error', 'You must specifiy a project.');
     process.exit(1);
   }
 };

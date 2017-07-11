@@ -10,17 +10,22 @@ program
   .option('-m, --comments', 'fetches comments/messages for all PRs')
   .option('-c, --commits', 'fetches abbreviated git commits for all PRs')
   .option('-a, --approvals', 'fetches approvals/activity for all PRs')
+  .option('-p, --project', 'match the project name and fetch all its repos PRs')
   .parse(process.argv);
 
-// Pass in all arguments but `refresh` currently only handles one repo index
-pr.refresh(program.args, () => {
-  if(program.comments) {
-    pr.refreshComments(program.args);
-  }
-  if(program.commits) {
-    pr.refreshCommits(program.args);
-  }
-  if(program.approvals) {
-    pr.refreshApprovals(program.args);
-  }
-});
+
+if(program.project) {
+  pr.refreshProject(program.args, program.comments, program.commits, program.approvals);
+} else {
+  pr.refresh(program.args, () => {
+    if(program.comments) {
+      pr.refreshComments(program.args);
+    }
+    if(program.commits) {
+      pr.refreshCommits(program.args);
+    }
+    if(program.approvals) {
+      pr.refreshApprovals(program.args);
+    }
+  });
+}
