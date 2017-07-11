@@ -186,27 +186,16 @@ module.exports = {
   },
 
   /**
-   * Displays a list of repositories found in the Bitbucket account.
-   * @param {Array} projects filter and display only repositories matching these projects (case insensitive)
+   * Gets an array of repo objects matching the project names.
+   * @param {Array} projects list of projects of interest
+   * @return {Array} matching repositories
    */
-  listRepos: function(projects) {
+  reposForProjects: function(projects) {
     let index = getIndexFromDisk();
     if(index === null || !index.repos) {
-      logger.log('error', `Listing requires a repo index file. Run command 'repo index'.`);
+      logger.log('error', `Getting repos requires a repo index file. Run command 'repo index'.`);
       process.exit(1);
     }
-
-    let table = new Table({
-      head: ['Repository Slug', 'Project', 'Description'],
-      colWidths: [35, 20, 60],
-      chars: {
-        'top': '', 'top-mid': '', 'top-left': '', 'top-right': '',
-        'bottom': '-', 'bottom-mid': '', 'bottom-left': '', 'bottom-right': '',
-        'left': '', 'left-mid': '', 'mid': '', 'mid-mid': '',
-        'right': '', 'right-mid': '', 'middle': ' ',
-      },
-      style: {'head': ['green'], 'padding-left': 0, 'padding-right': 0},
-    });
 
     // Filter out repositories not matching one of the projects specified
     let regexCondition = null;
@@ -229,9 +218,30 @@ module.exports = {
       return o.slug;
     });
 
+    return filtered;
+  },
+
+  /**
+   * Displays a list of repositories found in the Bitbucket account.
+   * @param {Array} projects filter and display only repositories matching these projects (case insensitive)
+   */
+  listRepos: function(projects) {
+    let filtered = this.reposForProjects(projects);
+    let table = new Table({
+      head: ['Repository Slug', 'Project', 'Description'],
+      colWidths: [35, 20, 60],
+      chars: {
+        'top': '', 'top-mid': '', 'top-left': '', 'top-right': '',
+        'bottom': '-', 'bottom-mid': '', 'bottom-left': '', 'bottom-right': '',
+        'left': '', 'left-mid': '', 'mid': '', 'mid-mid': '',
+        'right': '', 'right-mid': '', 'middle': ' ',
+      },
+      style: {'head': ['green'], 'padding-left': 0, 'padding-right': 0},
+    });
+
     // Only return the data that matters
     filtered.map((r) => {
-      let o = [
+      const o = [
         r.slug,
         r.project.key,
         r.description,
