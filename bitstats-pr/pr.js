@@ -407,7 +407,8 @@ module.exports = {
   },
 
   /**
-   * Fetches comment data from Bitbucket and serializes to disk.
+   * Fetches comment data from Bitbucket and serializes to disk. This
+   * function has a dependency on existing PR data.
    *
    * This function will only fetch newer PR comments from Bitbucket.
    * It will not update existing PRs or comments. To fully update
@@ -590,7 +591,8 @@ module.exports = {
   },
 
   /**
-   * Fetches commit data from Bitbucket and serializes to disk.
+   * Fetches commit data from Bitbucket and serializes to disk. This
+   * function has a dependency on existing PR data.
    *
    * This function will only fetch new commits from Bitbucket. It will not
    * update existing commits (how would those change anyway?). To fully
@@ -769,7 +771,8 @@ module.exports = {
   },
 
   /**
-   * Fetches approval activities from Bitbucket and serializes to disk.
+   * Fetches approval activities from Bitbucket and serializes to disk. This
+   * function has a dependency on existing PR data.
    *
    * This function will only fetch new approvals from Bitbucket. To fully
    * update the index, the only way is to dump the PR index and refresh.
