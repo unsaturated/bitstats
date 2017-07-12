@@ -218,10 +218,31 @@ module.exports = {
   },
 
   /**
+   * Clears (deletes) all PR information serialized to disk for a project's repositories.
+   * @param {string} projectName name of the project
+   * @param {bool} force if deletion should be forced or prompt for each repo
+   */
+  clearProject: function(projectName, force) {
+    exitOnInvalidProjectSlug(projectName);
+
+    const repoList = repo.reposForProjects(projectName);
+
+    if(!repoList.length) {
+      logger.log('error', `No repositories found for that project name. Run command 'repo list' to view.`);
+      process.exit(1);
+    }
+
+    for(const repo of repoList) {
+      this.clear(repo.slug, force);
+    }
+  },
+
+  /**
    * Clears (deletes) all PR information serialized to disk.
    * @param {string} repoSlug name of the repo
+   * @param {bool} force if deletion should be forced or prompt for each repo
    */
-  clear: function(repoSlug) {
+  clear: function(repoSlug, force) {
     exitOnInvalidRepoSlug(repoSlug);
 
     let repoSlugCleaned = arrayHeadOrValue(repoSlug);
@@ -229,20 +250,29 @@ module.exports = {
     const dirToDelete = path.join(prConfig.directory.replace('{repo_slug}', repoSlugCleaned));
 
     if (fs.existsSync(dirToDelete)) {
-      const rl = readline.createInterface({
-        input: process.stdin,
-        output: process.stdout,
-      });
+      if(force) {
+        fs.removeSync(dirToDelete);
+      } else {
+        // Create an 'are you sure?' prompt
+        const rl = readline.createInterface({
+          input: process.stdin,
+          output: process.stdout,
+        });
 
-      rl.question(`Delete cached PR files for '${repoSlug}' (n/Y)? : `, (a) => {
-        if (isCleanYes(a)) {
-          fs.removeSync(dirToDelete);
-          logger.log('info', `Deleted PR files for that repository.`);
-        }
-        rl.close();
-      });
+        rl.question(`Delete cached PR files for '${repoSlug}' (n/Y)? : `,
+            (a) => {
+              if (isCleanYes(a)) {
+                fs.removeSync(dirToDelete);
+                logger.log('info', `Deleted PR files for that repository.`);
+              }
+              rl.close();
+            });
+      }
     } else {
-      logger.log('info', `No PR data was found.`);
+      if(!force) {
+        // Don't nag about non-existent repos if delete is forced
+        logger.log('info', `No PR data was found for '${repoSlugCleaned}.`);
+      }
     }
   },
 
@@ -296,27 +326,21 @@ module.exports = {
             async.series([
                 function(cb) {
                   if(comments) {
-                    _this.refreshComments(repoToIndex.slug, () => {
-                      cb();
-                    });
+                    _this.refreshComments(repoToIndex.slug, cb);
                   } else {
                     cb();
                   }
                 },
                 function(cb) {
                   if(commits) {
-                    _this.refreshCommits(repoToIndex.slug, () => {
-                      cb();
-                    });
+                    _this.refreshCommits(repoToIndex.slug, cb);
                   } else {
                     cb();
                   }
                 },
                 function(cb) {
                   if(approvals) {
-                    _this.refreshApprovals(repoToIndex.slug, () => {
-                      cb();
-                    });
+                    _this.refreshApprovals(repoToIndex.slug, cb);
                   } else {
                     cb();
                   }
@@ -1262,7 +1286,7 @@ const isCleanYes = (value) => {
  * @return {string|null} contents at array index 0 or null if not a valid array
  */
 const arrayHeadOrValue = (input) => {
-  if(typeof input != 'undefined' && input != null && input.length > 0) {
+  if(typeof input != 'undefined' && input != null && (typeof input === 'array') && input.length > 0) {
     return input[0];
   } else {
     return input.toString().trim();
