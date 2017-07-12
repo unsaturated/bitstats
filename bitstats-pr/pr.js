@@ -91,9 +91,9 @@ module.exports = {
         exportArray.push({
           id: _.has(fileData, 'pullrequest.id') ? fileData.pullrequest.id : null,
           author_display_name: _.has(fileData, 'user.display_name') ? fileData.user.display_name : null,
-          is_reply: _.has(fileData, 'parent.id') ? true : false,
+          is_reply: _.has(fileData, 'parent.id'),
           is_pr_author: _.has(fileData, 'is_pr_author') ? fileData.is_pr_author : null,
-          is_inline: _.has(fileData, 'inline') ? true : false,
+          is_inline: _.has(fileData, 'inline'),
           created_on: _.has(fileData, 'created_on') ? fileData.created_on : null,
           word_count: _.has(fileData, 'content.raw') ? fileData.content.raw.match(/\S+/g).length : 0,
         });
@@ -266,12 +266,15 @@ module.exports = {
    * matching the project specified.
    *
    * @param {Array} projects list of projects of interest
+   * @param {bool} comments whether to fetch comments
+   * @param {bool} commits whether to fetch commits
+   * @param {bool} approvals whether to fetch approvals
    * @param {Function} [refreshProjectDone] function called when refresh is complete
    */
-  refreshProject: function(projects, refreshProjectDone) {
+  refreshProject: function(projects, comments, commits, approvals, refreshProjectDone) {
     exitOnInvalidProjectSlug(projects);
 
-    const repoList = this.reposForProjects(projects);
+    const repoList = repo.reposForProjects(projects);
 
     if(!repoList.length) {
       logger.log('error', `No repositories found for that project name. Run command 'repo list' to view.`);
@@ -280,6 +283,7 @@ module.exports = {
 
     let repoCount = repoList.length;
     let reposDone = 0;
+    let _this = this;
 
     async.whilst(
         function() {
@@ -288,9 +292,40 @@ module.exports = {
         function(whilstCallback) {
           let repoToIndex = repoList.pop();
           logger.log('info', `Indexing repo '${repoToIndex.slug}'...`);
-          this.refresh(repoToIndex.slug, () => {
-            reposDone++;
-            whilstCallback();
+          _this.refresh(repoToIndex.slug, () => {
+            async.series([
+                function(cb) {
+                  if(comments) {
+                    _this.refreshComments(repoToIndex.slug, () => {
+                      cb();
+                    });
+                  } else {
+                    cb();
+                  }
+                },
+                function(cb) {
+                  if(commits) {
+                    _this.refreshCommits(repoToIndex.slug, () => {
+                      cb();
+                    });
+                  } else {
+                    cb();
+                  }
+                },
+                function(cb) {
+                  if(approvals) {
+                    _this.refreshApprovals(repoToIndex.slug, () => {
+                      cb();
+                    });
+                  } else {
+                    cb();
+                  }
+                },
+            ],
+            function(err, results) {
+              reposDone++;
+              whilstCallback();
+            });
           });
         },
         function(err, data) {
@@ -764,8 +799,7 @@ module.exports = {
                       // Use original options but with new token
                       requestPage(updatedOptionsWithToken);
                     });
-                }
-                else {
+                } else {
                   logger.log('error', err.message);
                 }
               });
@@ -1140,7 +1174,7 @@ const getFileAndPathRegex = (repoSlug, searchType='') => {
   switch(searchType) {
     case '':
       filePath = path.join(prConfig.directory.replace('{repo_slug}', repoSlug));
-      reg = prConfig.fileNamePatternPrRegex
+      reg = prConfig.fileNamePatternPrRegex;
       break;
     case 'comments':
       filePath = path.join(prConfig.commentsDirectory.replace('{repo_slug}', repoSlug));
