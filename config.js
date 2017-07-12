@@ -43,7 +43,7 @@ const bitbucket = {
 
 const jira = {
   ticketRegExp: /[A-Z]{2,10}\-\d{1,5}/g,
-}
+};
 
 const creds = {
   fileNameAuth: 'bitstats-oauth',
