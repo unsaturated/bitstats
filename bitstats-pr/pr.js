@@ -18,6 +18,10 @@ const async = require('async');
 
 module.exports = {
 
+  exportProject: function(projectSlug, fileName=`${projectSlug}-pr.csv`, exportDone) {
+
+  },
+
   /**
    * Exports the PR data for a repository to a CSV file.
    *
@@ -28,32 +32,10 @@ module.exports = {
   export: function(repoSlug, fileName=`${repoSlug}-pr.csv`, exportDone) {
     exitOnInvalidRepoSlug(repoSlug);
     let repoSlugCleaned = arrayHeadOrValue(repoSlug);
-    let result = getFileListOfAllPullRequests(repoSlugCleaned);
-    if(result !== null) {
-      let exportArray = [];
-      for(let fObj of result) {
-        let fileData = JSON.parse(fs.readFileSync(fObj.path));
+    let exportArray = getArrayDataForPr(repoSlugCleaned);
 
-        // Get Jira ticket information (if any is available)
-        let title = _.has(fileData, 'title') ? fileData.title : null;
-        let description = _.has(fileData, 'description') ? fileData.description : null;
-        let titleAndDescription = (title || '') + (description || '');
-        let tickets = _.uniq(titleAndDescription.match(jiraConfig.ticketRegExp)).join(',');
-
-        exportArray.push({
-          id: _.has(fileData, 'id') ? fileData.id : null,
-          author_display_name: _.has(fileData, 'author.display_name') ? fileData.author.display_name : null,
-          closed_by_display_name: _.has(fileData, 'closed_by.display_name') ? fileData.closed_by.display_name : null,
-          comment_count: _.has(fileData, 'comment_count') ? fileData.comment_count : 0,
-          created_on: _.has(fileData, 'created_on') ? fileData.created_on : null,
-          destination_branch_name: _.has(fileData, 'destination.branch.name') ? fileData.destination.branch.name : null,
-          source_branch_name: _.has(fileData, 'source.branch.name') ? fileData.source.branch.name : null,
-          state: _.has(fileData, 'state') ? fileData.state : null,
-          updated_on: _.has(fileData, 'updated_on') ? fileData.updated_on : null,
-          word_count: titleAndDescription.match(/\S+/g).length,
-          tickets: tickets.length ? tickets : null,
-        });
-      }
+    if(exportArray.length) {
+      // Use the first array object to extract its keys (to serve as header row for CSV)
       let dataForSerialization = json2csv({
         data: exportArray,
         fields: Object.keys(_.head(exportArray)),
@@ -69,7 +51,7 @@ module.exports = {
         }
       });
     } else {
-      logger.log('info', 'No PRs data to export.');
+      logger.log('info', `No PR data to export for repo slug '${repoSlugCleaned}'.`);
     }
   },
 
@@ -1070,6 +1052,48 @@ module.exports = {
     }
   },
 };
+
+/**
+ * Gets array of data for all PRs of a particular repository.
+ *
+ * This is data that can be aggregated at a higher level to create a
+ * union of various repositories.
+ *
+ * @param {string} repoSlug repository slug
+ * @return {Array} array of objects each corresponding to a single PR
+ */
+const getArrayDataForPr = (repoSlug) => {
+  let result = getFileListOfAllPullRequests(repoSlug);
+  let exportArray = [];
+
+  if(result !== null) {
+    for(let fObj of result) {
+      let fileData = JSON.parse(fs.readFileSync(fObj.path));
+
+      // Get Jira ticket information (if any is available)
+      let title = _.has(fileData, 'title') ? fileData.title : null;
+      let description = _.has(fileData, 'description') ? fileData.description : null;
+      let titleAndDescription = (title || '') + (description || '');
+      let tickets = _.uniq(titleAndDescription.match(jiraConfig.ticketRegExp)).join(',');
+
+      exportArray.push({
+        id: _.has(fileData, 'id') ? fileData.id : null,
+        author_display_name: _.has(fileData, 'author.display_name') ? fileData.author.display_name : null,
+        closed_by_display_name: _.has(fileData, 'closed_by.display_name') ? fileData.closed_by.display_name : null,
+        comment_count: _.has(fileData, 'comment_count') ? fileData.comment_count : 0,
+        created_on: _.has(fileData, 'created_on') ? fileData.created_on : null,
+        destination_branch_name: _.has(fileData, 'destination.branch.name') ? fileData.destination.branch.name : null,
+        source_branch_name: _.has(fileData, 'source.branch.name') ? fileData.source.branch.name : null,
+        state: _.has(fileData, 'state') ? fileData.state : null,
+        updated_on: _.has(fileData, 'updated_on') ? fileData.updated_on : null,
+        word_count: titleAndDescription.match(/\S+/g).length,
+        tickets: tickets.length ? tickets : null,
+      });
+    }
+  }
+  return exportArray;
+};
+
 
 /**
  * Creates a clone of a request options object and modifies its Authorization header.
