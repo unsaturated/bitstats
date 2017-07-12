@@ -65,21 +65,10 @@ module.exports = {
   exportComments: function(repoSlug, fileName=`${repoSlug}-comment.csv`, exportDone) {
     exitOnInvalidRepoSlug(repoSlug);
     let repoSlugCleaned = arrayHeadOrValue(repoSlug);
-    let result = getFileListOfAllPullRequests(repoSlugCleaned, 'comments');
-    if(result !== null) {
-      let exportArray = [];
-      for(let fObj of result) {
-        let fileData = JSON.parse(fs.readFileSync(fObj.path));
-        exportArray.push({
-          id: _.has(fileData, 'pullrequest.id') ? fileData.pullrequest.id : null,
-          author_display_name: _.has(fileData, 'user.display_name') ? fileData.user.display_name : null,
-          is_reply: _.has(fileData, 'parent.id'),
-          is_pr_author: _.has(fileData, 'is_pr_author') ? fileData.is_pr_author : null,
-          is_inline: _.has(fileData, 'inline'),
-          created_on: _.has(fileData, 'created_on') ? fileData.created_on : null,
-          word_count: _.has(fileData, 'content.raw') ? fileData.content.raw.match(/\S+/g).length : 0,
-        });
-      }
+    let exportArray = getArrayDataForComments(repoSlugCleaned);
+
+    if(exportArray.length) {
+      // Use the first array object to extract its keys (to serve as header row for CSV)
       let dataForSerialization = json2csv({
         data: exportArray,
         fields: Object.keys(_.head(exportArray)),
@@ -95,7 +84,7 @@ module.exports = {
         }
       });
     } else {
-      logger.log('info', 'No comment data to export.');
+      logger.log('info', `No comment data to export for repo slug '${repoSlugCleaned}'.`);
     }
   },
 
@@ -109,29 +98,9 @@ module.exports = {
   exportCommits: function(repoSlug, fileName=`${repoSlug}-commit.csv`, exportDone) {
     exitOnInvalidRepoSlug(repoSlug);
     let repoSlugCleaned = arrayHeadOrValue(repoSlug);
-    let result = getFileListOfAllPullRequests(repoSlugCleaned, 'commits');
-    if(result !== null) {
-      let exportArray = [];
-      for(let fObj of result) {
-        let fileData = JSON.parse(fs.readFileSync(fObj.path));
+    let exportArray = getArrayDataForCommits(repoSlugCleaned);
 
-        for(let commit of fileData.commits) {
-          // Get Jira ticket information (if any is available)
-          let message = _.has(commit, 'message') ? commit.message : null;
-          let tickets = _.uniq(message.match(jiraConfig.ticketRegExp)).join(',');
-
-          exportArray.push({
-            id: fObj.index,
-            author_display_name: _.has(commit, 'author.user.display_name') ? commit.author.user.display_name : null,
-            hash: _.has(commit, 'hash') ? commit.hash : null,
-            is_pr_author: _.has(commit, 'is_pr_author') ? commit.is_pr_author : null,
-            date: _.has(commit, 'date') ? commit.date : null,
-            word_count: _.has(commit, 'message') ? commit.message.match(/\S+/g).length : 0,
-            is_merge: _.has(commit, 'parents') ? (commit.parents.length > 1) : false,
-            tickets: tickets.length ? tickets : null,
-          });
-        }
-      }
+    if(exportArray.length) {
       let dataForSerialization = json2csv({
         data: exportArray,
         fields: Object.keys(_.head(exportArray)),
@@ -147,7 +116,7 @@ module.exports = {
         }
       });
     } else {
-      logger.log('info', 'No commit data to export.');
+      logger.log('info', `No commit data to export for repo slug '${repoSlugCleaned}'.`);
     }
   },
 
@@ -161,41 +130,25 @@ module.exports = {
   exportApprovals: function(repoSlug, fileName=`${repoSlug}-approval.csv`, exportDone) {
     exitOnInvalidRepoSlug(repoSlug);
     let repoSlugCleaned = arrayHeadOrValue(repoSlug);
-    let result = getFileListOfAllPullRequests(repoSlugCleaned, 'approvals');
-    if(result !== null) {
-      let exportArray = [];
-      for(let fObj of result) {
-        let fileData = JSON.parse(fs.readFileSync(fObj.path));
+    let exportArray = getArrayDataForApprovals(repoSlugCleaned);
 
-        for(let approvalData of fileData.approvals) {
-          exportArray.push({
-            id: fObj.index,
-            author_display_name: _.has(approvalData, 'display_name') ? approvalData.display_name : null,
-            is_pr_author: _.has(approvalData, 'is_pr_author') ? approvalData.is_pr_author : null,
-            date: _.has(approvalData, 'date') ? approvalData.date : null,
-            state: _.has(approvalData, 'state') ? approvalData.state : null,
-            is_approval: _.has(approvalData, 'is_approval') ? approvalData.is_approval : false,
-            is_declined: _.has(approvalData, 'is_declined') ? approvalData.is_declined : false,
-            is_update: _.has(approvalData, 'is_update') ? approvalData.is_update : false,
-          });
-        }
-      }
+    if(exportArray.length) {
       let dataForSerialization = json2csv({
         data: exportArray,
         fields: Object.keys(_.head(exportArray)),
       });
       fs.writeFile(fileName, dataForSerialization, (err) => {
         if(err) {
-          logger.log('error', `Could not serialize commit data to file '${fileName}'.`);
+          logger.log('error', `Could not serialize approval data to file '${fileName}'.`);
         } else {
-          logger.log('info', `PR commits exported to '${fileName}'.`);
+          logger.log('info', `PR approvals exported to '${fileName}'.`);
         }
         if(exportDone && typeof exportDone === 'function') {
           exportDone();
         }
       });
     } else {
-      logger.log('info', 'No commit data to export.');
+      logger.log('info', `No approval data to export for repo slug '${repoSlugCleaned}'.`);
     }
   },
 
@@ -1078,6 +1031,7 @@ const getArrayDataForPr = (repoSlug) => {
 
       exportArray.push({
         id: _.has(fileData, 'id') ? fileData.id : null,
+        repo: repoSlug,
         author_display_name: _.has(fileData, 'author.display_name') ? fileData.author.display_name : null,
         closed_by_display_name: _.has(fileData, 'closed_by.display_name') ? fileData.closed_by.display_name : null,
         comment_count: _.has(fileData, 'comment_count') ? fileData.comment_count : 0,
@@ -1094,6 +1048,113 @@ const getArrayDataForPr = (repoSlug) => {
   return exportArray;
 };
 
+/**
+ * Gets array of data for all PR comments of a particular repository.
+ *
+ * This is data that can be aggregated at a higher level to create a
+ * union of various repositories.
+ *
+ * @param {string} repoSlug repository slug
+ * @return {Array} array of objects each corresponding to a single comment
+ */
+const getArrayDataForComments = (repoSlug) => {
+  let result = getFileListOfAllPullRequests(repoSlug, 'comments');
+  let exportArray = [];
+
+  if(result !== null) {
+    for(let fObj of result) {
+      let fileData = JSON.parse(fs.readFileSync(fObj.path));
+      exportArray.push({
+        id: _.has(fileData, 'pullrequest.id') ? fileData.pullrequest.id : null,
+        repo: repoSlug,
+        author_display_name: _.has(fileData, 'user.display_name') ? fileData.user.display_name : null,
+        is_reply: _.has(fileData, 'parent.id'),
+        is_pr_author: _.has(fileData, 'is_pr_author') ? fileData.is_pr_author : null,
+        is_inline: _.has(fileData, 'inline'),
+        created_on: _.has(fileData, 'created_on') ? fileData.created_on : null,
+        word_count: _.has(fileData, 'content.raw') ? fileData.content.raw.match(/\S+/g).length : 0,
+      });
+    }
+  }
+
+  return exportArray;
+};
+
+/**
+ * Gets array of data for all PR commits of a particular repository.
+ *
+ * This is data that can be aggregated at a higher level to create a
+ * union of various repositories.
+ *
+ * @param {string} repoSlug repository slug
+ * @return {Array} array of objects each corresponding to a single commit
+ */
+const getArrayDataForCommits = (repoSlug) => {
+  let result = getFileListOfAllPullRequests(repoSlug, 'commits');
+  let exportArray = [];
+
+  if(result !== null) {
+    for(let fObj of result) {
+      let fileData = JSON.parse(fs.readFileSync(fObj.path));
+
+      for(let commit of fileData.commits) {
+        // Get Jira ticket information (if any is available)
+        let message = _.has(commit, 'message') ? commit.message : null;
+        let tickets = _.uniq(message.match(jiraConfig.ticketRegExp)).join(',');
+
+        exportArray.push({
+          id: fObj.index,
+          repo: repoSlug,
+          author_display_name: _.has(commit, 'author.user.display_name') ? commit.author.user.display_name : null,
+          hash: _.has(commit, 'hash') ? commit.hash : null,
+          is_pr_author: _.has(commit, 'is_pr_author') ? commit.is_pr_author : null,
+          date: _.has(commit, 'date') ? commit.date : null,
+          word_count: _.has(commit, 'message') ? commit.message.match(/\S+/g).length : 0,
+          is_merge: _.has(commit, 'parents') ? (commit.parents.length > 1) : false,
+          tickets: tickets.length ? tickets : null,
+        });
+      }
+    }
+  }
+
+  return exportArray;
+};
+
+/**
+ * Gets array of data for all PR approvals of a particular repository.
+ *
+ * This is data that can be aggregated at a higher level to create a
+ * union of various repositories.
+ *
+ * @param {string} repoSlug repository slug
+ * @return {Array} array of objects each corresponding to a single approval
+ */
+const getArrayDataForApprovals = (repoSlug) => {
+  let result = getFileListOfAllPullRequests(repoSlug, 'approvals');
+  let exportArray = [];
+
+  if(result !== null) {
+    for(let fObj of result) {
+      let fileData = JSON.parse(fs.readFileSync(fObj.path));
+
+      for(let approvalData of fileData.approvals) {
+        exportArray.push({
+          id: fObj.index,
+          repo: repoSlug,
+          author_display_name: _.has(approvalData, 'display_name') ? approvalData.display_name : null,
+          is_pr_author: _.has(approvalData, 'is_pr_author') ? approvalData.is_pr_author : null,
+          date: _.has(approvalData, 'date') ? approvalData.date : null,
+          state: _.has(approvalData, 'state') ? approvalData.state : null,
+          is_approval: _.has(approvalData, 'is_approval') ? approvalData.is_approval : false,
+          is_declined: _.has(approvalData, 'is_declined') ? approvalData.is_declined : false,
+          is_update: _.has(approvalData, 'is_update') ? approvalData.is_update : false,
+        });
+      }
+    }
+  }
+
+  return exportArray;
+};
 
 /**
  * Creates a clone of a request options object and modifies its Authorization header.
