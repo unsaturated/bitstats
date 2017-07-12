@@ -18,8 +18,94 @@ const async = require('async');
 
 module.exports = {
 
-  exportProject: function(projectSlug, fileName=`${projectSlug}-pr.csv`, exportDone) {
+  /**
+   * Exports a project's PR, comment, commit, and approval data to a CSV file
+   * @param {String} projectSlug project slug
+   * @param {bool} comments whether to include comments
+   * @param {bool} commits whether to include commits
+   * @param {bool} approvals whether to include approvals
+   * @param {function} [exportDone] export operation is done
+   */
+  exportProject: function(projectSlug, comments, commits, approvals, exportDone) {
+    exitOnInvalidProjectSlug(projectSlug);
+    const repoList = repo.reposForProjects(projectSlug);
 
+    if(!repoList.length) {
+      logger.log('error', `No repositories found for that project name. Run command 'repo list' to view.`);
+      process.exit(1);
+    }
+
+    /**
+     * Creates the CSV object and serializes to a file.
+     * @param {string} slug repository or project slug
+     * @param {array} arrData array of data
+     * @param {string} exportType type such as 'comment' or 'approvals'
+     * @param {string} fileName file name to write
+     * @param {Function} exportDone callback when file is written
+     */
+    const writeCsvForArray = (slug, arrData, exportType, fileName=`${slug}-project-${exportType}.csv`, exportDone) => {
+      if(arrData.length) {
+        // Use the first array object to extract its keys (to serve as header row for CSV)
+        let dataForSerialization = json2csv({
+          data: arrData,
+          fields: Object.keys(_.head(arrData)),
+        });
+        fs.writeFile(fileName, dataForSerialization, (err) => {
+          if(err) {
+            logger.log('error', `Could not serialize data to file '${fileName}'.`);
+          } else {
+            logger.log('info', `Data exported to '${fileName}'.`);
+          }
+          if(exportDone && typeof exportDone === 'function') {
+            exportDone();
+          }
+        });
+      } else {
+        logger.log('info', `No ${exportType} data to export for slug '${slug}'.`);
+      }
+    };
+
+    let projectPrArray = [];
+    let projectCommentsArray = [];
+    let projectCommitsArray = [];
+    let projectApprovalsArray = [];
+
+    for (const repoToExport of repoList) {
+      logger.log('debug', `Exporting repo '${repoToExport.slug}'...`);
+
+      let exportPrArray = getArrayDataForPr(repoToExport.slug);
+      projectPrArray.push(...exportPrArray);
+
+      let exportCommentsArray = comments ? getArrayDataForComments(repoToExport.slug) : [];
+      projectCommentsArray.push(...exportCommentsArray);
+
+      let exportCommitsArray = commits ? getArrayDataForCommits(repoToExport.slug) : [];
+      projectCommitsArray.push(...exportCommitsArray);
+
+      let exportApprovalsArray = approvals ? getArrayDataForApprovals(repoToExport.slug) : [];
+      projectApprovalsArray.push(...exportApprovalsArray);
+    }
+
+    async.series([
+          function(cb) {
+              writeCsvForArray(projectSlug, projectPrArray, 'pr', undefined, cb);
+          },
+          function(cb) {
+            writeCsvForArray(projectSlug, projectCommentsArray, 'comments', undefined, cb);
+          },
+          function(cb) {
+            writeCsvForArray(projectSlug, projectCommitsArray, 'commits', undefined, cb);
+          },
+          function(cb) {
+            writeCsvForArray(projectSlug, projectApprovalsArray, 'approvals', undefined, cb);
+          },
+        ],
+        function(err, data) {
+          if (exportDone && typeof exportDone === 'function') {
+            logger.log('info', `Done exporting project '${projectSlug}'.`);
+            exportDone();
+          }
+        });
   },
 
   /**

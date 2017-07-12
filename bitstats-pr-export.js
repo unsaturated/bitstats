@@ -9,18 +9,22 @@ program
   .usage('<repo>')
   .option('-m, --comments', 'include comment data')
   .option('-c, --commits', 'include commit data')
-  .option('-p, --approvals', 'include approval data')
+  .option('-a, --approvals', 'include approval data')
+  .option('-p, --project', 'export at project-level')
   .parse(process.argv);
 
-// Pass in all arguments but `export` currently only handles one repo index
-pr.export(program.args, undefined, () => {
-  if(program.comments) {
-    pr.exportComments(program.args);
-  }
-  if(program.commits) {
-    pr.exportCommits(program.args);
-  }
-  if(program.approvals) {
-    pr.exportApprovals(program.args);
-  }
-});
+if (program.project) {
+  pr.exportProject(program.args, program.comments, program.commits, program.approvals);
+} else {
+  pr.export(program.args, undefined, () => {
+    if (program.comments) {
+      pr.exportComments(program.args);
+    }
+    if (program.commits) {
+      pr.exportCommits(program.args);
+    }
+    if (program.approvals) {
+      pr.exportApprovals(program.args);
+    }
+  });
+}
