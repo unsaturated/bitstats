@@ -43,17 +43,17 @@ module.exports = {
    *
    * This will trigger an index fetch if none exists.
    *
-   * @param {String} name name of the repository
+   * @param {String} slug slug of the repository
    * @return {Object} repository summary
    */
-  getRepoByName: function(name) {
+  getRepoByName: function(slug) {
     let index = this.getRepos();
     if(index === null) {
       logger.log('error', 'No repository index was found.');
     }
-    let repo = _.find(index.repos, {name: name});
+    let repo = _.find(index.repos, {slug: slug});
     if(!repo) {
-      logger.log('error', `No repository named ${name} was found.`);
+      logger.log('error', `No repository with slug '${slug}' was found.`);
       process.exit(1);
     } else {
       return repo;

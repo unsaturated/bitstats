@@ -317,7 +317,7 @@ module.exports = {
 
     async.whilst(
         function() {
-          return reposDone <= repoCount;
+          return reposDone < repoCount;
         },
         function(whilstCallback) {
           let repoToIndex = repoList.pop();
