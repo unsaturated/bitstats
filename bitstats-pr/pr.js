@@ -584,8 +584,8 @@ module.exports = {
     const minMaxPr = getHighestPullRequestIdFromDisk(repoSlugCleaned);
 
     if(minMaxPr === null) {
-      logger.log('info', 'No PRs are available for this repository.');
-      process.exit(0);
+      logger.log('info', `No PR comments are available for repo '${repoSlugCleaned}'.`);
+      return refreshDone();
     }
 
     // What PRs do we have for comments?
@@ -768,8 +768,8 @@ module.exports = {
     const minMaxPr = getHighestPullRequestIdFromDisk(repoSlugCleaned);
 
     if(minMaxPr === null) {
-      logger.log('info', 'No PRs are available for this repository.');
-      process.exit(0);
+      logger.log('info', `No PR commits are available for repo '${repoSlugCleaned}'.`);
+      return refreshDone();
     }
 
     // What PRs do we have for commits?
@@ -946,8 +946,8 @@ module.exports = {
     const minMaxPr = getHighestPullRequestIdFromDisk(repoSlugCleaned);
 
     if(minMaxPr === null) {
-      logger.log('info', 'No PRs are available for this repository.');
-      process.exit(0);
+      logger.log('info', `No PR approvals are available for repo '${repoSlugCleaned}'.`);
+      return refreshDone();
     }
 
     // What PRs do we have for approvals?
