@@ -11,9 +11,12 @@ program
   .option('-c, --commits', 'include commit data')
   .option('-a, --approvals', 'include approval data')
   .option('-p, --project', 'export at project-level')
+  .option('-g, --global', 'export at global level')
   .parse(process.argv);
 
-if (program.project) {
+if(program.global) {
+  pr.exportGlobal(program.comments, program.commits, program.approvals);
+} else if (program.project) {
   pr.exportProject(program.args, program.comments, program.commits, program.approvals);
 } else {
   pr.export(program.args, undefined, () => {

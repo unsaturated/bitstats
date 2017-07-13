@@ -11,10 +11,12 @@ program
   .option('-c, --commits', 'fetches abbreviated git commits for all PRs')
   .option('-a, --approvals', 'fetches approvals/activity for all PRs')
   .option('-p, --project', 'match the project name and fetch all its repos PRs')
+  .option('-g, --global', 'fetch all repos')
   .parse(process.argv);
 
-
-if(program.project) {
+if(program.global) {
+  pr.refreshGlobal(program.comments, program.commits, program.approvals);
+} else if(program.project) {
   pr.refreshProject(program.args, program.comments, program.commits, program.approvals);
 } else {
   pr.refresh(program.args, () => {

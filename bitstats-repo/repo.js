@@ -200,7 +200,7 @@ module.exports = {
     // Filter out repositories not matching one of the projects specified
     let regexCondition = null;
     let filtered = index.repos;
-    if(projects && projects.length) {
+    if(projects && projects.length && projects !== 'global') {
       projects = projects.map((p) => {
         return `^${p}$`;
       });

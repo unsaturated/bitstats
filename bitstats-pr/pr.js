@@ -19,8 +19,19 @@ const async = require('async');
 module.exports = {
 
   /**
-   * Exports a project's PR, comment, commit, and approval data to a CSV file
-   * @param {String} projectSlug project slug
+   * Exports global PR, comment, commit, and approval data to CSV files.
+   * @param {bool} comments whether to include comments
+   * @param {bool} commits whether to include commits
+   * @param {bool} approvals whether to include approvals
+   * @param {function} [exportDone] export operation is done
+   */
+  exportGlobal: function(comments, commits, approvals, exportDone) {
+    this.exportProject('global', comments, commits, approvals, exportDone);
+  },
+
+  /**
+   * Exports a project's PR, comment, commit, and approval data to CSV files.
+   * @param {String} projectSlug project slug or 'global' for all repositories
    * @param {bool} comments whether to include comments
    * @param {bool} commits whether to include commits
    * @param {bool} approvals whether to include approvals
@@ -239,6 +250,14 @@ module.exports = {
   },
 
   /**
+   * Clears (deletes) all PR information serialized to disk for all repositories.
+   * @param {bool} force if deletion should be forced or prompt for each repo
+   */
+  clearGlobal: function(force) {
+    this.clearProject('global', force);
+  },
+
+  /**
    * Clears (deletes) all PR information serialized to disk for a project's repositories.
    * @param {string} projectName name of the project
    * @param {bool} force if deletion should be forced or prompt for each repo
@@ -310,6 +329,18 @@ module.exports = {
     const filePath = path.join(prConfig.directory.replace('{repo_slug}', repoSlugCleaned));
 
     return fs.existsSync(filePath);
+  },
+
+  /**
+   * Fetches pull request data from Bitbucket for all repositories.
+   *
+   * @param {bool} comments whether to fetch comments
+   * @param {bool} commits whether to fetch commits
+   * @param {bool} approvals whether to fetch approvals
+   * @param {Function} [refreshGlobalDone] function called when refresh is complete
+   */
+  refreshGlobal: function(comments, commits, approvals, refreshGlobalDone) {
+    this.refreshProject('global', comments, commits, approvals, refreshGlobalDone);
   },
 
   /**
@@ -1477,11 +1508,11 @@ const exitOnInvalidRepoSlug = (repoSlug) => {
 
 /**
  * Checks the project slug to ensure it's a valid string and exist if not.
- * @param {string} projSlug project slug
+ * @param {string} projSlug project slug or 'global'
  */
 const exitOnInvalidProjectSlug = (projSlug) => {
   if(!projSlug || !projSlug.length) {
-    logger.log('error', 'You must specifiy a project.');
+    logger.log('error', `You must specifiy a project or 'global' for all projects.`);
     process.exit(1);
   }
 };
