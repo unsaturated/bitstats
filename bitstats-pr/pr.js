@@ -1137,6 +1137,7 @@ const getArrayDataForPr = (repoSlug) => {
   let exportArray = [];
 
   if(result !== null) {
+    const projectKey = repo.getRepoByName(repoSlug).project.key;
     for(let fObj of result) {
       let fileData = JSON.parse(fs.readFileSync(fObj.path));
 
@@ -1149,6 +1150,7 @@ const getArrayDataForPr = (repoSlug) => {
       exportArray.push({
         id: _.has(fileData, 'id') ? fileData.id : null,
         repo: repoSlug,
+        project: projectKey,
         author_display_name: _.has(fileData, 'author.display_name') ? fileData.author.display_name : null,
         closed_by_display_name: _.has(fileData, 'closed_by.display_name') ? fileData.closed_by.display_name : null,
         comment_count: _.has(fileData, 'comment_count') ? fileData.comment_count : 0,
@@ -1179,11 +1181,13 @@ const getArrayDataForComments = (repoSlug) => {
   let exportArray = [];
 
   if(result !== null) {
+    const projectKey = repo.getRepoByName(repoSlug).project.key;
     for(let fObj of result) {
       let fileData = JSON.parse(fs.readFileSync(fObj.path));
       exportArray.push({
         id: _.has(fileData, 'pullrequest.id') ? fileData.pullrequest.id : null,
         repo: repoSlug,
+        project: projectKey,
         author_display_name: _.has(fileData, 'user.display_name') ? fileData.user.display_name : null,
         is_reply: _.has(fileData, 'parent.id'),
         is_pr_author: _.has(fileData, 'is_pr_author') ? fileData.is_pr_author : null,
@@ -1211,6 +1215,7 @@ const getArrayDataForCommits = (repoSlug) => {
   let exportArray = [];
 
   if(result !== null) {
+    const projectKey = repo.getRepoByName(repoSlug).project.key;
     for(let fObj of result) {
       let fileData = JSON.parse(fs.readFileSync(fObj.path));
 
@@ -1222,6 +1227,7 @@ const getArrayDataForCommits = (repoSlug) => {
         exportArray.push({
           id: fObj.index,
           repo: repoSlug,
+          project: projectKey,
           author_display_name: _.has(commit, 'author.user.display_name') ? commit.author.user.display_name : null,
           hash: _.has(commit, 'hash') ? commit.hash : null,
           is_pr_author: _.has(commit, 'is_pr_author') ? commit.is_pr_author : null,
@@ -1251,6 +1257,7 @@ const getArrayDataForApprovals = (repoSlug) => {
   let exportArray = [];
 
   if(result !== null) {
+    const projectKey = repo.getRepoByName(repoSlug).project.key;
     for(let fObj of result) {
       let fileData = JSON.parse(fs.readFileSync(fObj.path));
 
@@ -1258,6 +1265,7 @@ const getArrayDataForApprovals = (repoSlug) => {
         exportArray.push({
           id: fObj.index,
           repo: repoSlug,
+          project: projectKey,
           author_display_name: _.has(approvalData, 'display_name') ? approvalData.display_name : null,
           is_pr_author: _.has(approvalData, 'is_pr_author') ? approvalData.is_pr_author : null,
           date: _.has(approvalData, 'date') ? approvalData.date : null,
