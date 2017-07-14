@@ -738,6 +738,9 @@ module.exports = {
         });
     } else {
       logger.log('info', 'No PR comments to fetch.');
+      if (refreshDone && typeof refreshDone === 'function') {
+        return refreshDone();
+      }
     }
   },
 
@@ -917,6 +920,9 @@ module.exports = {
         });
     } else {
       logger.log('info', 'No PR commits to fetch.');
+      if (refreshDone && typeof refreshDone === 'function') {
+        return refreshDone();
+      }
     }
   },
 
@@ -1119,6 +1125,9 @@ module.exports = {
         });
     } else {
       logger.log('info', 'No PR approvals/activity to fetch.');
+      if (refreshDone && typeof refreshDone === 'function') {
+        return refreshDone();
+      }
     }
   },
 };
