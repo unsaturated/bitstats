@@ -50,7 +50,7 @@ module.exports = {
      * Creates the CSV object and serializes to a file.
      * @param {string} slug repository or project slug
      * @param {array} arrData array of data
-     * @param {string} exportType type such as 'comment' or 'approvals'
+     * @param {string} exportType type such as 'comments' or 'approvals'
      * @param {string} fileName file name to write
      * @param {Function} exportDone callback when file is written
      */
@@ -99,7 +99,7 @@ module.exports = {
 
     async.series([
           function(cb) {
-              writeCsvForArray(projectSlug, projectPrArray, 'pr', undefined, cb);
+              writeCsvForArray(projectSlug, projectPrArray, 'prs', undefined, cb);
           },
           function(cb) {
             writeCsvForArray(projectSlug, projectCommentsArray, 'comments', undefined, cb);
@@ -126,7 +126,7 @@ module.exports = {
    * @param {String} [fileName=reposlug-pr.csv] file name to write
    * @param {Function} [exportDone] export operation is done
    */
-  export: function(repoSlug, fileName=`${repoSlug}-pr.csv`, exportDone) {
+  export: function(repoSlug, fileName=`${repoSlug}-prs.csv`, exportDone) {
     exitOnInvalidRepoSlug(repoSlug);
     let repoSlugCleaned = arrayHeadOrValue(repoSlug);
     let exportArray = getArrayDataForPr(repoSlugCleaned);
