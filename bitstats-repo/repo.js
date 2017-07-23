@@ -251,6 +251,44 @@ module.exports = {
 
     console.log(table.toString());
   },
+
+  /**
+   * Displays a list of projects found in the Bitbucket account.
+   * @param {Array} projects filter and display only repositories matching these projects (case insensitive)
+   */
+  listProjects: function(projects) {
+    let filtered = this.reposForProjects(projects);
+    let table = new Table({
+      head: ['Project', 'Repo Samples'],
+      colWidths: [35, 80],
+      chars: {
+        'top': '', 'top-mid': '', 'top-left': '', 'top-right': '',
+        'bottom': '-', 'bottom-mid': '', 'bottom-left': '', 'bottom-right': '',
+        'left': '', 'left-mid': '', 'mid': '', 'mid-mid': '',
+        'right': '', 'right-mid': '', 'middle': ' ',
+      },
+      style: {'head': ['green'], 'padding-left': 0, 'padding-right': 0},
+    });
+
+    let dict = {};
+
+    filtered.map((repo) => {
+      if(!dict[repo.project.key]) {
+        dict[repo.project.key] = [];
+      }
+      dict[repo.project.key].push(repo.slug);
+    });
+
+    for(const key in dict) {
+      if ({}.hasOwnProperty.call(dict, key)) {
+        // Take the first N repositories and stringify them as samples
+        dict[key] = _.take(_.uniq(dict[key]), 3).join(', ');
+        table.push([key, dict[key]]);
+      }
+    }
+
+    console.log(table.toString());
+  },
 };
 
 /**
