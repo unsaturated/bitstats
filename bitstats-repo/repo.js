@@ -224,8 +224,9 @@ module.exports = {
   /**
    * Displays a list of repositories found in the Bitbucket account.
    * @param {Array} projects filter and display only repositories matching these projects (case insensitive)
+   * @param {boolean} grepable whether the printed list should be easily grep-able
    */
-  listRepos: function(projects) {
+  listRepos: function(projects, grepable) {
     let filtered = this.reposForProjects(projects);
     let table = new Table({
       head: ['Repository Slug', 'Project', 'Description'],
@@ -241,22 +242,29 @@ module.exports = {
 
     // Only return the data that matters
     filtered.map((r) => {
-      const o = [
-        r.slug,
-        r.project.key,
-        r.description,
-      ];
-      table.push(o);
+      if(grepable) {
+        console.log(`${r.slug}|${r.project.key}|${r.description}`);
+      } else {
+        const o = [
+          r.slug,
+          r.project.key,
+          r.description,
+        ];
+        table.push(o);
+      }
     });
 
-    console.log(table.toString());
+    if(!grepable) {
+      console.log(table.toString());
+    }
   },
 
   /**
    * Displays a list of projects found in the Bitbucket account.
    * @param {Array} projects filter and display only repositories matching these projects (case insensitive)
+   * @param {boolean} grepable whether the printed list should be easily grep-able
    */
-  listProjects: function(projects) {
+  listProjects: function(projects, grepable) {
     let filtered = this.reposForProjects(projects);
     let table = new Table({
       head: ['Project', 'Repo Samples'],
@@ -283,11 +291,17 @@ module.exports = {
       if ({}.hasOwnProperty.call(dict, key)) {
         // Take the first N repositories and stringify them as samples
         dict[key] = _.take(_.uniq(dict[key]), 3).join(', ');
-        table.push([key, dict[key]]);
+        if(!grepable) {
+          table.push([key, dict[key]]);
+        } else {
+          console.log(`${key}|${dict[key]}`);
+        }
       }
     }
 
-    console.log(table.toString());
+    if(!grepable) {
+      console.log(table.toString());
+    }
   },
 };
 
