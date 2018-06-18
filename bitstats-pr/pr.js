@@ -709,6 +709,12 @@ module.exports = {
 
             const comNum = data.id;
 
+            // Escape quickly if the comment is deleted
+            if(data.deleted){
+              writeDone();
+              return;
+            }
+
             // Amend the serialized data
             // This is the fastest way to trace a commenter back to who created the PR
             data.is_pr_author = (prData.author.display_name === data.user.display_name);
@@ -1241,7 +1247,7 @@ const getArrayDataForCommits = (repoSlug) => {
           hash: _.has(commit, 'hash') ? commit.hash : null,
           is_pr_author: _.has(commit, 'is_pr_author') ? commit.is_pr_author : null,
           date: _.has(commit, 'date') ? commit.date : null,
-          word_count: _.has(commit, 'message') ? commit.message.match(/\S+/g).length : 0,
+          word_count: _.has(commit, 'message') ? (commit.message.match(/\S+/g) ? commit.message.match(/\S+/g).length : 0) : 0,
           is_merge: _.has(commit, 'parents') ? (commit.parents.length > 1) : false,
           tickets: tickets.length ? tickets : null,
         });
