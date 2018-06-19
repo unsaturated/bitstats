@@ -75,6 +75,13 @@ const pr = {
   approvalsDirectory: path.join(os.homedir(), '.bitstats', 'data', 'pr', '{repo_slug}', 'approvals'),
 };
 
+const commits = {
+  fileNamePatternSingleCommit: 'bitstats-commit-{com#}.json',
+  fileNamePatternSingleCommitRegex: /bitstats-\commit\-(\w+)\.json/i,
+
+  directory: path.join(os.homedir(), '.bitstats', 'data', 'commits', '{repo_slug}'),
+};
+
 /**
  * Common application logger.
  */
@@ -97,6 +104,11 @@ module.exports.repositories = repo;
  * @type {{fileNamePatternPrIndex: string, directory: *}}
  */
 module.exports.pr = pr;
+
+/**
+ * Commits per user organized by the repository slug then user ID.
+ */
+module.exports.commits = commits;
 
 /**
  * Bitbucket configuration.

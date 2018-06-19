@@ -4,10 +4,12 @@
 const logger = require('../config').logger;
 const bitbucket = require('../config').bitbucket;
 const repos = require('../config').repositories;
+const commitConfig = require('../config').commits;
 const setup = require('../bitstats-setup/setup');
-const fs = require('fs');
+const fs = require('fs-extra');
 const path = require('path');
 const request = require('request-promise');
+const {URL} = require('url');
 const _ = require('lodash');
 const Table = require('cli-table');
 
@@ -178,6 +180,131 @@ module.exports = {
   },
 
   /**
+   * Gets the repository commits from the Bitbucket API.
+   *
+   * @param {string} repoSlug slug of the repository
+   * @param {function} commitsDone called when all commits are fetched
+   */
+  getCommits: function(repoSlug, commitsDone) {
+    exitOnInvalidRepoSlug(repoSlug);
+
+    let repoSlugCleaned = arrayHeadOrValue(repoSlug);
+
+    let token = setup.getToken();
+
+    if(token === null) {
+      logger.log('error', `Repo commit fetch requires an OAuth access token. Run command 'setup -t'.`);
+      process.exit(1);
+    }
+
+    // Construct the URL - currently only supports MERGED PRs
+    const repoObj = this.getRepoByName(repoSlugCleaned);
+    const commitUrl = new URL(repoObj.links.commits.href);
+    let url = commitUrl.href;
+
+    const options = {
+      method: 'GET',
+      url: url,
+      headers: {
+        'Authorization': `Bearer ${token.access_token}`,
+      },
+      gzip: true,
+      json: true,
+      rejectUnauthorized: false,
+    };
+
+    const cloneOptionsWithToken = (opt, updatedToken) => {
+      let clonedOpt = Object.assign({}, opt);
+      clonedOpt.headers.Authorization = `Bearer ${updatedToken.access_token}`;
+      return clonedOpt;
+    };
+
+    /**
+     * Uses request to fetch a page of data.
+     * @param {object} req request instance
+     * @param {object} options request options (verb, headers, etc)
+     */
+    const requestCommits = (req, options) => {
+      const originalOptions = Object.assign({}, options);
+
+      const requestPage = (options) => {
+        logger.log('debug', `Fetching ${options.url} ...`);
+        return req(options)
+          .then((body) => {
+            let nextUrl = getNextPageUrl(body);
+
+            // Write the commits to file
+            writeResponse(repoSlugCleaned, body);
+
+            if(nextUrl !== null) {
+              options.url = nextUrl;
+              requestPage(options);
+            }
+          });
+      };
+
+      requestPage(options)
+        .then(() => {
+      })
+        .catch((err) => {
+          if (err.statusCode === 401) {
+            logger.log('debug', 'Access token rejected. Refreshing it now.');
+            setup.refreshToken()
+              .then((refreshedToken) => {
+                let updatedOptionsWithToken = cloneOptionsWithToken(originalOptions, refreshedToken);
+                logger.log('debug', 'New access token received. Retrying commit request.');
+                // Use original options but with new token
+                requestPage(updatedOptionsWithToken);
+              });
+          } else {
+            logger.log('error', err.message);
+          }
+        });
+    };
+
+    /**
+     * Gets next page URL from response.
+     * @param {Object} data /repositories response.
+     * @return {String|Null} Url of next page or null
+     */
+    const getNextPageUrl = (data) => {
+      let result = null;
+      if(data && data.pagelen > 1 && data.next) {
+        result = data.next;
+      }
+      return result;
+    };
+
+    /**
+     * Writes data to the commit file.
+     * @param {string} repoSlug repository slug to use for subdirectory
+     * @param {object} data JSON to serialize for a single commit
+     */
+    const writeResponse = (repoSlug, data) => {
+      const dir = commitConfig.directory.replace('{repo_slug}', repoSlug);
+
+      createDirSync(dir);
+
+      data.values.forEach(function(d) {
+        const dataExtracted = Object.assign({},
+          {hash: d.hash},
+          {date: d.date},
+          {message: d.message},
+          {author: {
+            user: {
+              username: d.author.user.username,
+              display_name: d.author.user.display_name,
+          }}});
+
+        const filePath = path.join(dir, commitConfig.fileNamePatternSingleCommit.replace('{com#}', d.hash));
+        fs.writeFileSync(filePath, JSON.stringify(dataExtracted));
+      });
+    };
+
+    requestCommits(request, options);
+  },
+
+  /**
    * Clears (deletes) all repository index information and fetches it again.
    */
   refresh: function() {
@@ -329,6 +456,31 @@ const getIndexFromDisk = () => {
 };
 
 /**
+ * Gets the index file for a repository's commits.
+ * @param {string} repoSlug repository slug
+ * @param {string} hash commit hash
+ * @return {number|null} pages cached ("len") or null if no index found
+ */
+const hasCommitOnDisk = (repoSlug, hash) => {
+  if(!repoSlug || !repoSlug.length) {
+    logger.log('error', 'Repository slug is invalid.');
+    process.exit(1);
+  }
+
+  if(!hash || !hash.length) {
+    logger.log('error', 'Repository hash is invalid.');
+    process.exit(1);
+  }
+
+  const filePath = path.join(
+    commitConfig.directory.replace('{repo_slug}', repoSlug),
+    commitConfig.fileNamePatternSingleCommit.replace('{com#}', hash));
+
+  return fs.existsSync(filePath);
+};
+
+
+/**
  * Creates the user's repository directory if it does not exist.
  * @param {string} dir directory to create
  */
@@ -336,5 +488,42 @@ const createDir = (dir) => {
   // Create directory if not exists
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir);
+  }
+};
+
+/**
+ * Creates the directory if it does not exist.
+ * @param {string} dir directory to create
+ */
+const createDirSync = (dir) => {
+  // Create directory if not exists
+  if (!fs.existsSync(dir)) {
+    fs.ensureDirSync(dir);
+  }
+};
+
+/**
+ * Checks the repository slug to ensure it's a valid string and exist if not.
+ * @param {string} repoSlug repository slug
+ */
+const exitOnInvalidRepoSlug = (repoSlug) => {
+  if(!repoSlug || !repoSlug.length) {
+    logger.log('error', 'You must specifiy a repository.');
+    process.exit(1);
+  }
+};
+
+/**
+ * Inspects an object to test if array then returns the head, or
+ * simply returns the string.
+ *
+ * @param {array|string} input object to inspect
+ * @return {string|null} contents at array index 0 or null if not a valid array
+ */
+const arrayHeadOrValue = (input) => {
+  if(typeof input != 'undefined' && input != null && (typeof input === 'array') && input.length > 0) {
+    return input[0];
+  } else {
+    return input.toString().trim();
   }
 };
