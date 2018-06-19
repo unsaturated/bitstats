@@ -42,7 +42,7 @@ const bitbucket = {
 };
 
 const jira = {
-  ticketRegExp: /[A-Z]{2,10}\-\d{1,5}/g,
+  ticketRegExp: /[A-Z0-9]{1,10}\-\d{1,5}/g,
 };
 
 const creds = {
@@ -77,7 +77,7 @@ const pr = {
 
 const commits = {
   fileNamePatternSingleCommit: 'bitstats-commit-{com#}.json',
-  fileNamePatternSingleCommitRegex: /bitstats-\commit\-(\w+)\.json/i,
+  fileNamePatternSingleCommitRegex: /bitstats\-commit\-(\w+)\.json/i,
 
   directory: path.join(os.homedir(), '.bitstats', 'data', 'commits', '{repo_slug}'),
 };

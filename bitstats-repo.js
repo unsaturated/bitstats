@@ -8,5 +8,6 @@ program
   .command('list', 'lists repositories')
   .command('index', 'creates or refreshes the repository index')
   .command('commits', 'gets commits for the repository')
+  .command('export', 'exports commit efforts for a repository')
   .command('rmindex', 'removes the repository index')
   .parse(process.argv);

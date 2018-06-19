@@ -5,12 +5,14 @@ const logger = require('../config').logger;
 const bitbucket = require('../config').bitbucket;
 const repos = require('../config').repositories;
 const commitConfig = require('../config').commits;
+const jiraConfig = require('../config').jira;
 const setup = require('../bitstats-setup/setup');
 const fs = require('fs-extra');
 const path = require('path');
 const request = require('request-promise');
 const {URL} = require('url');
 const _ = require('lodash');
+const json2csv = require('json2csv');
 const Table = require('cli-table');
 
 module.exports = {
@@ -292,8 +294,8 @@ module.exports = {
           {message: d.message},
           {author: {
             user: {
-              username: d.author.user.username,
-              display_name: d.author.user.display_name,
+              username: (d.author.user && d.author.user.username) ? d.author.user.username : 'Unknown',
+              display_name: (d.author.user && d.author.user.display_name) ? d.author.user.display_name : 'Unknown',
           }}});
 
         const filePath = path.join(dir, commitConfig.fileNamePatternSingleCommit.replace('{com#}', d.hash));
@@ -302,6 +304,38 @@ module.exports = {
     };
 
     requestCommits(request, options);
+  },
+
+  /**
+   * Exports commit data for a specific repository to a CSV file.
+   *
+   * @param {String} repoSlug repository slug
+   * @param {String} [fileName=reposlug-commits.csv] file name to write
+   * @param {Function} [exportDone] export operation is done
+   */
+  exportCommits: function(repoSlug, fileName=`${repoSlug}-commits.csv`, exportDone) {
+    exitOnInvalidRepoSlug(repoSlug);
+    let repoSlugCleaned = arrayHeadOrValue(repoSlug);
+    let exportArray = this.getArrayDataForCommits(repoSlugCleaned);
+
+    if(exportArray.length) {
+      let dataForSerialization = json2csv({
+        data: exportArray,
+        fields: Object.keys(_.head(exportArray)),
+      });
+      fs.writeFile(fileName, dataForSerialization, (err) => {
+        if(err) {
+          logger.log('error', `Could not serialize commit data to file '${fileName}'.`);
+        } else {
+          logger.log('info', `Repository commits exported to '${fileName}'.`);
+        }
+        if(exportDone && typeof exportDone === 'function') {
+          exportDone();
+        }
+      });
+    } else {
+      logger.log('info', `No commit data to export for repo slug '${repoSlugCleaned}'.`);
+    }
   },
 
   /**
@@ -430,6 +464,79 @@ module.exports = {
       console.log(table.toString());
     }
   },
+
+  /**
+   * Gets array of data for all commits of a particular repository.
+   *
+   * @param {string} repoSlug repository slug
+   * @return {Array} array of objects each corresponding to a single commit
+   */
+  getArrayDataForCommits: function(repoSlug) {
+    let result = getFileListOfAllCommits(repoSlug);
+    let exportArray = [];
+
+    if(result !== null) {
+      const projectKey = this.getRepoByName(repoSlug).project.key;
+      for(let fObj of result) {
+        let commit = JSON.parse(fs.readFileSync(fObj.path));
+
+        // Get Jira ticket information (if any is available)
+        let message = _.has(commit, 'message') ? commit.message : null;
+        let tickets = _.uniq(message.match(jiraConfig.ticketRegExp)).join(',');
+
+        exportArray.push({
+          repo: repoSlug,
+          project: projectKey,
+          author_display_name: _.has(commit, 'author.user.display_name') ? commit.author.user.display_name : commit.author.user.username,
+          hash: _.has(commit, 'hash') ? commit.hash : null,
+          date: _.has(commit, 'date') ? commit.date : null,
+          message: _.has(commit, 'message') ? commit.message : null,
+          message_word_count: _.has(commit, 'message') ? (commit.message.match(/\S+/g) ? commit.message.match(/\S+/g).length : 0) : 0,
+          tickets: tickets.length ? tickets : null,
+        });
+      }
+    }
+
+    return exportArray;
+  },
+
+};
+
+/**
+ * Gets the file listing for all PRs on disk for a given repository.
+ *
+ * This performs a regular expression check on each file to ensure only
+ * expected files are included in the listing (i.e. no README or dot files).
+ *
+ * @param {string} repoSlug repository slug
+ * @return {Array|Null} Full file list or null if none found
+ */
+const getFileListOfAllCommits = (repoSlug) => {
+  if(!repoSlug || !repoSlug.length) {
+    logger.log('error', 'Repository slug is invalid.');
+    process.exit(1);
+  }
+
+  const filePath = path.join(commitConfig.directory.replace('{repo_slug}', repoSlug));
+  const reg = commitConfig.fileNamePatternSingleCommitRegex;
+
+  if (fs.existsSync(filePath)) {
+    let files = [];
+    const fileList = fs.readdirSync(filePath);
+    fileList.forEach((f) => {
+      let regResult = reg.exec(f);
+      if(regResult != null) {
+        let o = {
+          hash: regResult[1],
+          path: path.join(filePath, f),
+        };
+        files.push(o);
+      }
+    });
+
+    return files;
+  }
+  return null;
 };
 
 /**
@@ -478,7 +585,6 @@ const hasCommitOnDisk = (repoSlug, hash) => {
 
   return fs.existsSync(filePath);
 };
-
 
 /**
  * Creates the user's repository directory if it does not exist.
