@@ -567,6 +567,7 @@ module.exports = {
    *
    * @param {string} repoSlug repository to fetch PRs for
    * @param {Function} [refreshDone] function called when refresh is complete
+   * @return {function} completion
    */
   refreshComments: function(repoSlug, refreshDone) {
     exitOnInvalidRepoSlug(repoSlug);
@@ -710,7 +711,7 @@ module.exports = {
             const comNum = data.id;
 
             // Escape quickly if the comment is deleted
-            if(data.deleted){
+            if(data.deleted) {
               writeDone();
               return;
             }
@@ -760,6 +761,7 @@ module.exports = {
    *
    * @param {string} repoSlug repository to fetch commits for
    * @param {Function} [refreshDone] function called when refresh is complete
+   * @return {function} completion
    */
   refreshCommits: function(repoSlug, refreshDone) {
     exitOnInvalidRepoSlug(repoSlug);
@@ -941,6 +943,7 @@ module.exports = {
    *
    * @param {string} repoSlug repository to fetch approval activity for
    * @param {Function} [refreshDone] function called when refresh is complete
+   * @return {function} completion
    */
   refreshApprovals: function(repoSlug, refreshDone) {
     exitOnInvalidRepoSlug(repoSlug);
