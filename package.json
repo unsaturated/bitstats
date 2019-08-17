@@ -2,12 +2,31 @@
   "name": "bitstats",
   "version": "0.0.1",
   "description": "Tool for analyzing Bitbucket PRs and Git repository activity",
-  "main": "bitstats",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+  "keywords": [
+    "bitbucket",
+    "data",
+    "pr",
+    "git",
+    "repo",
+    "csv",
+    "stats"
+  ],
+  "homepage": "https://github.com/unsaturated/bitstats",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/unsaturated/bitstats.git"
   },
+  "bugs": {
+    "url": "https://github.com/unsaturated/bitstats/issues"
+  },
+  "contributors": [],
+  "engines": {
+    "node": ">=8.0.0"
+  },
+  "main": "bitstats",
+  "scripts": {},
   "author": "Matthew Crumley",
-  "license": "UNLICENSED",
+  "license": "GPL-3.0-only",
   "dependencies": {
     "async": "^2.4.1",
     "cli-table": "^0.3.1",

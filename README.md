@@ -13,20 +13,20 @@ Bit Stats is a command line tool used similar to Git. Commands will sometimes ha
 ## Bitbucket Setup
   1. Go to the **Bitbucket settings** page located in the drop down menu by your avatar. Click the **OAuth** link under the **Access Management** heading.
 
-    ![Add Consumer](./doc/setup-step-1.jpg)
+     ![Add Consumer](./doc/setup-step-1.jpg)
 
-  2. Click the **Add consumer** button. You can call this consumer whatever you'd like. Permissions should be *at least* set to **Read**.
+  2. Click the **Add consumer** button. You can call this consumer whatever you'd like. Permissions should be *at least* set to **Read** for the repository and pull requests. The **Callback URL** is required and should be set to `https://bitbucket.org` because Bitstats uses OAuth2.
 
-    ![Consumer Settings](./doc/setup-step-2.jpg)
+     ![Consumer Settings](./doc/setup-step-2.jpg)
 
   3. Use the **key** and **secret** for your consumer for the next step.
 
-    ![Key and Secret](./doc/setup-step-3.jpg)
+     ![Key and Secret](./doc/setup-step-3.jpg)
 
 ## Program Setup
 You should now have a Bitbucket consumer key and secret. 
 
-  1. Run the `creds` sub-command with the `-s` option to set your credentails.
+  1. Run the `creds` sub-command with the `-s` option to set your credentails. Use the **key** and **secret** you were provided in the previous steps. When prompted for the repository URL you should enter `https://api.bitbucket.org/2.0/repositories/YOUR_USER_OR_ORGANIZATION_NAME`, making the appropriate replacement for your username or organization's username.
 
          ./bitstats setup creds --set
          
@@ -61,9 +61,9 @@ The `pr` command is the core functionality of Bitstats. It fetches PR data for v
  - group of repositories (project)
  - all repositories (global)
 
-Depending on your patience, you can also fetch the comment, commit, and approval activitiy. For example, to extract all data for all repositories in the "sysco" project:
+Depending on your patience, you can also fetch the comment, commit, and approval activitiy. For example, to extract all data for all repositories in the "demo" project:
 
-    ./bitstats pr index sysco --comments --commits --approvals --project
+    ./bitstats pr index demo --comments --commits --approvals --project
 
 **It's important to remember** all data fetched from Bitbucket is somehow *linked* to a pull request. The idea is that non-PR commits are not intended for production deployment. Right?
 
@@ -74,9 +74,9 @@ Data can be exported in the same scopes as the PR indexes. The resulting CSV fil
  - group of repositories (project)
  - all repositories (global)
 
-Only data that's *requested and available* will be exported. For example, to export all the data for "sysco" projects including comments, commits, and approvals:
+Only data that's *requested and available* will be exported. For example, to export all the data for "demo" projects including comments, commits, and approvals:
 
-    ./bitstats pr export sysco --comments --commits --approvals --project
+    ./bitstats pr export demo --comments --commits --approvals --project
 
 Look for your CSV files in the current working directory. 
 
