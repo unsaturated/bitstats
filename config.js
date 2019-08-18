@@ -33,7 +33,6 @@ logger.level = 'debug';
 const bitbucket = {
   api: {
     baseUrl: 'https://api.bitbucket.org/2.0',
-    repositories: 'https://api.bitbucket.org/2.0/repositories/madmobile',
   },
   oauth: {
     baseUrl: 'https://bitbucket.org/site/oauth2',

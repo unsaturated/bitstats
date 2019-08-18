@@ -1155,7 +1155,8 @@ const getArrayDataForPr = (repoSlug) => {
   let exportArray = [];
 
   if(result !== null) {
-    const projectKey = repo.getRepoByName(repoSlug).project.key;
+    const project = repo.getRepoByName(repoSlug).project;
+    const projectKey = (project && project.key) || '';
     for(let fObj of result) {
       let fileData = JSON.parse(fs.readFileSync(fObj.path));
 
@@ -1199,7 +1200,8 @@ const getArrayDataForComments = (repoSlug) => {
   let exportArray = [];
 
   if(result !== null) {
-    const projectKey = repo.getRepoByName(repoSlug).project.key;
+    const project = repo.getRepoByName(repoSlug).project;
+    const projectKey = (project && project.key) || '';
     for(let fObj of result) {
       let fileData = JSON.parse(fs.readFileSync(fObj.path));
       exportArray.push({
@@ -1233,7 +1235,8 @@ const getArrayDataForCommits = (repoSlug) => {
   let exportArray = [];
 
   if(result !== null) {
-    const projectKey = repo.getRepoByName(repoSlug).project.key;
+    const project = repo.getRepoByName(repoSlug).project;
+    const projectKey = (project && project.key) || '';
     for(let fObj of result) {
       let fileData = JSON.parse(fs.readFileSync(fObj.path));
 
@@ -1275,7 +1278,8 @@ const getArrayDataForApprovals = (repoSlug) => {
   let exportArray = [];
 
   if(result !== null) {
-    const projectKey = repo.getRepoByName(repoSlug).project.key;
+    const project = repo.getRepoByName(repoSlug).project;
+    const projectKey = (project && project.key) || '';
     for(let fObj of result) {
       let fileData = JSON.parse(fs.readFileSync(fObj.path));
 

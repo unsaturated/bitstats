@@ -41,6 +41,7 @@ module.exports = {
   /**
    * Serializes to a file credential information used to fetch an OAuth access
    * token. It overwrites previous credential information stored in the file.
+   * It also requests the repositories home URL.
    */
   setCredentials: function() {
     const rl = readline.createInterface({
@@ -48,16 +49,24 @@ module.exports = {
       output: process.stdout,
     });
 
-    let prompts = [
+    const prompts = [
       {
         question: 'Enter your OAuth consumer key: ',
         answer: null,
+        validates: isCleanOauthValue,
         error: 'Consumer key does not match known format',
       },
       {
         question: 'Enter your OAuth secret: ',
         answer: null,
+        validates: isCleanOauthValue,
         error: 'Secret does not match known format',
+      },
+      {
+        question: 'Enter your home URL of your repositories: ',
+        answer: null,
+        validates: isCleanUrlValue,
+        error: 'Repositories home URL is not a valid URL',
       },
     ];
 
@@ -68,7 +77,7 @@ module.exports = {
      */
     const getResponses = (promptIndex = 0, doneCallback) => {
       rl.question(prompts[promptIndex].question, (a) => {
-        if (!isCleanValue(a)) {
+        if (!prompts[promptIndex].validates(a)) {
           logger.log('error', prompts[promptIndex].error);
           rl.close();
           process.exit(1);
@@ -95,7 +104,7 @@ module.exports = {
 
       fs.writeFile(filePath, data, (err) => {
         if (err) {
-          let msg = `Could not write credentials to file '${filePath}'`;
+          let msg = `Could not write setup data to file '${filePath}'`;
           logger.log('error', msg);
         }
       });
@@ -117,11 +126,12 @@ module.exports = {
 
       let dataSplit = data.toString().split(os.EOL);
 
-      if (dataSplit.length === 2) {
-        if (isCleanValue(dataSplit[0]) && isCleanValue(dataSplit[1])) {
+      if (dataSplit.length === 3) {
+        if (isCleanOauthValue(dataSplit[0]) && isCleanOauthValue(dataSplit[1]) && isCleanUrlValue(dataSplit[2])) {
           result = {
             'key': dataSplit[0],
             'secret': dataSplit[1],
+            'repositories': dataSplit[2],
           };
         } else {
           logger.log('error', dataSplit);
@@ -174,8 +184,13 @@ module.exports = {
         writeToken(body);
         logger.log('debug', 'Token saved.');
       })
-      .catch((err) => {
-        logger.log('error', err);
+      .catch((ex) => {
+        if(ex && ex.error && ex.error) {
+          const errObj = JSON.parse(ex.error);
+          logger.log('error', errObj.error_description);
+        } else {
+          logger.log('error', ex);
+        }
       });
   },
 
@@ -235,9 +250,18 @@ module.exports = {
         .then((body) => {
           writeToken(body);
         })
-        .catch((err) => {
-          logger.log('error', err);
-          reject(err);
+        .catch((ex) => {
+          let errMessage = null;
+          if(ex && ex.error && (typeof ex.error === 'string')) {
+              logger.log('error', 'got here 1');
+              ex = JSON.parse(ex.error);
+          }
+          if(ex && ex.error && ex.error_description) {
+            errMessage = ex.error_description;
+          } else {
+            errMessage = 'Auth request failure. Try running \'setup token\' or verify OAuth consumer settings.';
+          }
+          reject(new Error(errMessage));
         });
     });
   },
@@ -267,13 +291,28 @@ module.exports = {
 
 
 /**
+ * Checks for clean input values related to OAuth.
+ * @param {string} value input from STDIN
+ * @return {Array|{index: number, input: string}}
+ */
+const isCleanOauthValue = (value) => {
+  const valueRegex = /^[a-zA-Z0-9]{1,50}$/;
+  return value.toString().match(valueRegex);
+};
+
+/**
  * Checks for clean input values.
  * @param {string} value input from STDIN
  * @return {Array|{index: number, input: string}}
  */
-const isCleanValue = (value) => {
-  const valueRegex = /^[a-zA-Z0-9]{1,50}$/;
-  return value.toString().match(valueRegex);
+const isCleanUrlValue = (value) => {
+  try {
+    new URL(value);
+    return true;
+  } catch(e) {
+    // URL will throw on failed parse - not super robust, just reasonable
+    return false;
+  }
 };
 
 /**
@@ -283,6 +322,6 @@ const isCleanValue = (value) => {
 const createDir = (dir) => {
   // Create directory if not exists
   if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir);
+    fs.mkdirSync(dir, {recursive: true});
   }
 };

@@ -2,7 +2,6 @@
  * Created by mcrumley on 6/7/17.
  */
 const logger = require('../config').logger;
-const bitbucket = require('../config').bitbucket;
 const repos = require('../config').repositories;
 const commitConfig = require('../config').commits;
 const jiraConfig = require('../config').jira;
@@ -77,9 +76,16 @@ module.exports = {
       process.exit(1);
     }
 
+    const authData = setup.getCredentials();
+
+    if(authData == null) {
+      logger.log('error', `Repo requires a repository URL. Run command 'setup -set'.`);
+      process.exit(1);
+    }
+
     const options = {
       method: 'GET',
-      url: bitbucket.api.repositories,
+      url: authData.repositories,
       headers: {
         'Authorization': `Bearer ${token.access_token}`,
       },
@@ -135,6 +141,9 @@ module.exports = {
                 logger.log('debug', 'New access token received. Retrying repo request.');
                 // Use original options but with new token
                 requestPage(updatedOptionsWithToken);
+              })
+              .catch((ex) => {
+                logger.log('error', ex.message);
               });
           } else {
             logger.log('error', err.message);
@@ -367,8 +376,10 @@ module.exports = {
       });
       regexCondition = new RegExp(projects.join('|'), 'i');
       filtered = _.filter(index.repos, (o) => {
+        const projectKey = (o && o.project && o.project.key) || '';
+        const projectName = (o && o.project && o.project.name) || '';
         if(regexCondition) {
-          return regexCondition.test(o.project.key) || regexCondition.test(o.project.name);
+          return regexCondition.test(projectKey) || regexCondition.test(projectName);
         }
         return true;
       });
@@ -403,12 +414,13 @@ module.exports = {
 
     // Only return the data that matters
     filtered.map((r) => {
+      const projectKey = (r.project && r.project.key) || '';
       if(grepable) {
-        console.log(`${r.slug}|${r.project.key}|${r.description}`);
+        console.log(`${r.slug}|${projectKey}|${r.description}`);
       } else {
         const o = [
           r.slug,
-          r.project.key,
+          projectKey,
           r.description,
         ];
         table.push(o);
@@ -442,10 +454,11 @@ module.exports = {
     let dict = {};
 
     filtered.map((repo) => {
-      if(!dict[repo.project.key]) {
-        dict[repo.project.key] = [];
+      const projectKey = (repo.project && repo.project.key) || '';
+      if(!dict[projectKey]) {
+        dict[projectKey] = [];
       }
-      dict[repo.project.key].push(repo.slug);
+      dict[projectKey].push(repo.slug);
     });
 
     for(const key in dict) {
@@ -476,7 +489,9 @@ module.exports = {
     let exportArray = [];
 
     if(result !== null) {
-      const projectKey = this.getRepoByName(repoSlug).project.key;
+      const project = this.getRepoByName(repoSlug).project;
+      const projectKey = (project && project.key) || '';
+
       for(let fObj of result) {
         let commit = JSON.parse(fs.readFileSync(fObj.path));
 
@@ -593,7 +608,7 @@ const hasCommitOnDisk = (repoSlug, hash) => {
 const createDir = (dir) => {
   // Create directory if not exists
   if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir);
+    fs.mkdirSync(dir, {recursive: true});
   }
 };
 

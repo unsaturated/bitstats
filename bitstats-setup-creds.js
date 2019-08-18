@@ -15,7 +15,7 @@ if (program.set) {
 } else {
   let creds = setup.getCredentials();
   if(creds) {
-    logger.log('info', 'Key= %s Secret= %s', creds.key, creds.secret);
+    logger.log('info', 'KEY=%s SECRET=%s URL=%s', creds.key, creds.secret, creds.repositories);
   } else {
     logger.log('info', 'No credentials found.');
   }
